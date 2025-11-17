@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="160" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="160" fill="#FF4081" fill-opacity="0.1"/>
+  <path d="M150 30C150 30 120 50 120 80C120 110 150 130 150 130" stroke="#FF4081" stroke-width="4" stroke-linecap="round"/>
+  <path d="M130 80H170" stroke="#FF4081" stroke-width="4" stroke-linecap="round"/>
+  <text x="150" y="150" fill="#FF4081" font-family="Arial" font-size="14" text-anchor="middle">Calculus</text>
+</svg> 
