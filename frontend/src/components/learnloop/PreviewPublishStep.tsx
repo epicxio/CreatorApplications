@@ -277,6 +277,37 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
     return icons[type] || <DescriptionIcon />;
   };
 
+  const formatDuration = (
+    value?: number | string | null,
+    options: { verbose?: boolean } = {}
+  ): string | null => {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const minutes = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (!minutes || Number.isNaN(minutes) || minutes <= 0) {
+      return null;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (options.verbose) {
+      if (hours > 0 && remainingMinutes > 0) {
+        return `${hours} hour${hours === 1 ? '' : 's'} ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}`;
+      }
+      if (hours > 0) {
+        return `${hours} hour${hours === 1 ? '' : 's'}`;
+      }
+      return `${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}`;
+    }
+    if (hours > 0 && remainingMinutes > 0) {
+      return `${hours}h ${remainingMinutes}m`;
+    }
+    if (hours > 0) {
+      return `${hours}h`;
+    }
+    return `${remainingMinutes}m`;
+  };
+
   return (
     <Box sx={{ 
       width: '100%',
@@ -487,11 +518,14 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                                       }
                                       secondary={
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                                          {lessonData?.duration && lessonData.duration > 0 && (
+                                          {lessonData?.duration !== undefined && 
+                                           lessonData?.duration !== null &&
+                                           Number(lessonData.duration) !== 0 &&
+                                           Number(lessonData.duration) > 0 && (
                                             <>
                                               <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                               <Typography variant="caption" color="text.secondary">
-                                                {Math.floor(lessonData.duration / 60)}h {lessonData.duration % 60}m
+                                                {Math.floor(Number(lessonData.duration) / 60)}h {Number(lessonData.duration) % 60}m
                                               </Typography>
                                             </>
                                           )}
@@ -517,25 +551,30 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                                     <Box sx={{ pl: 6, pr: 2, pt: 1, pb: 2, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
                                       <Stack spacing={2}>
                                         {/* Lesson Description */}
-                                        {lessonData?.description && (
+                                        {lessonData?.description && 
+                                         String(lessonData.description).trim() !== '' &&
+                                         String(lessonData.description).trim() !== '0' && (
                                           <Box>
                                             <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                                               Description:
                                             </Typography>
                                             <Typography variant="body2" color="text.primary">
-                                              {lessonData.description}
+                                              {String(lessonData.description).trim()}
                                             </Typography>
                                           </Box>
                                         )}
                                         
                                         {/* Lesson Duration */}
-                                        {lessonData?.duration && lessonData.duration > 0 && (
+                                        {lessonData?.duration !== undefined && 
+                                         lessonData?.duration !== null &&
+                                         Number(lessonData.duration) !== 0 &&
+                                         Number(lessonData.duration) > 0 && (
                                           <Box>
                                             <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                                               Duration:
                                             </Typography>
                                             <Typography variant="body2" color="text.primary">
-                                              {Math.floor(lessonData.duration / 60)} hour(s) {lessonData.duration % 60} minute(s)
+                                              {Math.floor(Number(lessonData.duration) / 60)} hour(s) {Number(lessonData.duration) % 60} minute(s)
                                             </Typography>
                                           </Box>
                                         )}
@@ -600,12 +639,16 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                                             <Typography variant="body2" color="text.primary">
                                               {lessonData.quizQuestions.length} question{lessonData.quizQuestions.length > 1 ? 's' : ''}
                                             </Typography>
-                                            {lessonData.content?.timeLimit && (
+                                            {lessonData.content?.timeLimit && 
+                                             lessonData.content.timeLimit !== '0' && 
+                                             Number(lessonData.content.timeLimit) > 0 && (
                                               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                                                 Time Limit: {lessonData.content.timeLimit} minutes
                                               </Typography>
                                             )}
-                                            {lessonData.content?.passingScore && (
+                                            {lessonData.content?.passingScore && 
+                                             lessonData.content.passingScore !== '0' && 
+                                             Number(lessonData.content.passingScore) > 0 && (
                                               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                                                 Passing Score: {lessonData.content.passingScore}%
                                               </Typography>
@@ -748,7 +791,9 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                                                   </Typography>
                                                 </Box>
                                               )}
-                                              {lessonData.liveFields?.duration && (
+                                              {lessonData.liveFields?.duration && 
+                                               lessonData.liveFields.duration !== '0' && 
+                                               Number(lessonData.liveFields.duration) > 0 && (
                                                 <Box>
                                                   <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                                                     Duration:

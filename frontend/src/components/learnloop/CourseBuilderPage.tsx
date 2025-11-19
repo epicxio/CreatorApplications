@@ -563,71 +563,32 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlCourseId]); // Only run when urlCourseId changes
 
-  // Save draft function (reusable for auto-save and before navigation)
-  const saveDraftBeforeLeave = React.useCallback(async (silent: boolean = false): Promise<boolean> => {
-    try {
-      // Check if there are any changes to save
-      // Include modules in the check - if there are modules/lessons, we should save
-      const hasModules = modules && modules.length > 0 && modules.some(m => m.title && m.title.trim() !== '');
-      const hasLessons = modules && modules.some(m => m.lessons && m.lessons.length > 0);
-      if (!title && !subtitle && !description && !category && !hasModules && !hasLessons) {
-        return true; // No changes to save
-      }
+  type ResourceType = 'document' | 'image' | 'video' | 'audio' | 'archive' | 'other';
 
-      if (!silent) {
-        setIsSavingBeforeLeave(true);
-      }
+  const getResourceType = React.useCallback((fileName: string): ResourceType => {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
 
-      const { courseService } = await import('../../services/courseService');
-      
-      // Helper function to determine resource type from file name/extension
-      const getResourceType = (fileName: string): 'document' | 'image' | 'video' | 'audio' | 'archive' | 'other' => {
-        const ext = fileName.split('.').pop()?.toLowerCase() || '';
-        
-        // Image types
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
-          return 'image';
-        }
-        
-        // Video types
-        if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(ext)) {
-          return 'video';
-        }
-        
-        // Audio types
-        if (['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'].includes(ext)) {
-          return 'audio';
-        }
-        
-        // Document types
-        if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp'].includes(ext)) {
-          return 'document';
-        }
-        
-        // Archive types
-        if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) {
-          return 'archive';
-        }
-        
-        // Default to 'other'
-        return 'other';
-      };
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+      return 'image';
+    }
+    if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(ext)) {
+      return 'video';
+    }
+    if (['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'].includes(ext)) {
+      return 'audio';
+    }
+    if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp'].includes(ext)) {
+      return 'document';
+    }
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) {
+      return 'archive';
+    }
+    return 'other';
+  }, []);
 
-      // Prepare course data from all steps
-      // Use "NA" for mandatory fields that are not filled (abrupt exit scenario)
-      const draftData = {
-        name: title || 'Untitled course',
-        subtitle: subtitle || '',
-        description: description || (title ? `Course: ${title}` : 'Course description will be added later'),
-        category: category || 'NA', // Use "NA" for abrupt exit
-        level: (level || 'NA') as 'Beginner' | 'Intermediate' | 'Advanced' | 'NA',
-        language: language || 'NA', // Use "NA" for abrupt exit
-        tags: tags || [],
-        visibility: (visibility || 'Public') as 'Public' | 'Unlisted' | 'Private',
-        coverImage: cover || null,
-        // Step 1: Curriculum - Map frontend format to backend format
-        // Only include modules if they exist and have at least a title
-        modules: modules && modules.length > 0 ? modules
+  const buildDraftPayload = React.useCallback(() => {
+    const preparedModules = modules && modules.length > 0
+      ? modules
           .filter(module => module.title && module.title.trim() !== '')
           .map((module, moduleIndex) => ({
             title: module.title,
@@ -637,20 +598,16 @@ const CourseBuilderPage: React.FC = React.memo(() => {
               .filter(lesson => lesson.title && lesson.title.trim() !== '')
               .map((lesson, lessonIndex) => {
                 const lessonData: any = lesson;
-                // Build content object
-                const content: any = lesson.content || {};
-                
-                // Add pre/post class messages to content
+                const content: any = { ...(lesson.content || {}) };
+
                 if (lessonData.preClassMessage) {
                   content.preClassMessage = lessonData.preClassMessage;
                 }
                 if (lessonData.postClassMessage) {
                   content.postClassMessage = lessonData.postClassMessage;
                 }
-                
-                // For Video lessons, include video and thumbnail URLs in content
+
                 if (lesson.type === 'Video' && lessonData.videos && lessonData.videos.length > 0) {
-                  // Use the first video-thumbnail pair
                   const firstVideo = lessonData.videos[0];
                   if (firstVideo.video?.url) {
                     content.videoUrl = firstVideo.video.url;
@@ -659,19 +616,15 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                     content.thumbnailUrl = firstVideo.thumbnail.url;
                   }
                 }
-                
-                // For Text lessons, include text content
+
                 if (lesson.type === 'Text') {
-                  // Use description as textContent, or extract from content if available
                   if (lessonData.description && lessonData.description.trim() !== '') {
                     content.textContent = lessonData.description;
                   } else if (content.textContent) {
-                    // Keep existing textContent if description is empty
                     content.textContent = content.textContent;
                   }
                 }
-                
-                // For Assignment lessons, include assignment fields in content
+
                 if (lesson.type === 'Assignment' && lessonData.assignmentFields) {
                   const assignmentFields = lessonData.assignmentFields;
                   if (assignmentFields.instructions) {
@@ -680,15 +633,14 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                   if (assignmentFields.submissionType) {
                     content.submissionType = assignmentFields.submissionType;
                   }
-                  if (assignmentFields.maxFileSize) {
-                    content.maxFileSize = parseInt(assignmentFields.maxFileSize.toString()) || 10;
+                  if (assignmentFields.maxFileSize !== undefined && assignmentFields.maxFileSize !== null) {
+                    content.maxFileSize = parseInt(assignmentFields.maxFileSize.toString(), 10) || 10;
                   }
                   if (assignmentFields.allowedFileTypes && Array.isArray(assignmentFields.allowedFileTypes)) {
                     content.allowedFileTypes = assignmentFields.allowedFileTypes.filter((t: string) => t && t.trim() !== '');
                   }
                 }
-                
-                // For Audio lessons, include audio metadata in content
+
                 if (lesson.type === 'Audio' && lessonData.audioFiles && lessonData.audioFiles.length > 0) {
                   const mappedAudioFiles = lessonData.audioFiles
                     .filter((audio: any) => audio && audio.url)
@@ -698,14 +650,13 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                       size: audio.size || 0,
                       storagePath: audio.storagePath || audio.path
                     }));
-                  
+
                   if (mappedAudioFiles.length > 0) {
                     content.audioFiles = mappedAudioFiles;
                     content.audioUrl = mappedAudioFiles[0].url;
                   }
                 }
-                
-                // For Live lessons, include live-specific fields in content
+
                 if (lesson.type === 'Live' && lessonData.liveFields) {
                   content.meetingLink = lessonData.liveFields.customLink || '';
                   content.meetingPlatform = lessonData.liveFields.meetingLink || 'Custom Link';
@@ -713,57 +664,51 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                     content.startDateTime = new Date(lessonData.liveFields.startDateTime);
                   }
                   if (lessonData.liveFields.duration) {
-                    const duration = parseInt(lessonData.liveFields.duration) || 0;
+                    const duration = parseInt(lessonData.liveFields.duration, 10) || 0;
                     if (content.startDateTime) {
                       content.endDateTime = new Date(new Date(content.startDateTime).getTime() + duration * 60000);
                     }
                   }
                 }
-                
-                // For Quiz lessons, include quiz questions in content
+
                 if (lesson.type === 'Quiz' && lessonData.quizQuestions && Array.isArray(lessonData.quizQuestions) && lessonData.quizQuestions.length > 0) {
                   content.questions = lessonData.quizQuestions
-                    .filter((q: any) => q && q.question && q.question.trim() !== '') // Filter out empty questions
+                    .filter((q: any) => q && q.question && q.question.trim() !== '')
                     .map((q: any) => {
                       const options = q.options?.filter((opt: any) => opt && opt.text && opt.text.trim() !== '') || [];
                       const optionTexts = options.map((opt: any) => opt.text.trim());
-                      
-                      // Determine correct answer(s)
+
                       let correctAnswer: string | string[] = '';
                       if (q.type === 'single') {
-                        // Single choice: find the first correct option
                         const correctOption = options.find((opt: any) => opt.isCorrect);
                         correctAnswer = correctOption ? correctOption.text.trim() : (optionTexts[0] || '');
                       } else if (q.type === 'multiple') {
-                        // Multiple choice: get all correct options
                         correctAnswer = options
                           .filter((opt: any) => opt.isCorrect)
                           .map((opt: any) => opt.text.trim());
-                        // If no correct answers selected, default to first option
-                        if (correctAnswer.length === 0 && optionTexts.length > 0) {
+                        if ((correctAnswer as string[]).length === 0 && optionTexts.length > 0) {
                           correctAnswer = [optionTexts[0]];
                         }
                       }
-                      
+
                       return {
                         question: q.question.trim(),
                         type: q.type === 'single' ? 'multiple-choice' : q.type === 'multiple' ? 'multiple-choice' : 'text',
                         options: optionTexts,
-                        correctAnswer: correctAnswer,
+                        correctAnswer,
                         points: q.points || 10,
                         explanation: q.explanation ? q.explanation.trim() : undefined
                       };
                     });
-                  
-                  // Add quiz metadata if available
+
                   if (lessonData.timeLimit) {
-                    content.timeLimit = parseInt(lessonData.timeLimit) || 30;
+                    content.timeLimit = parseInt(lessonData.timeLimit, 10) || 30;
                   }
                   if (lessonData.passingScore) {
-                    content.passingScore = parseInt(lessonData.passingScore) || 70;
+                    content.passingScore = parseInt(lessonData.passingScore, 10) || 70;
                   }
                 }
-                
+
                 return {
                   title: lesson.title,
                   description: lesson.description || '',
@@ -771,8 +716,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                   duration: lesson.duration || 0,
                   order: lesson.order !== undefined ? lesson.order : lessonIndex + 1,
                   isUnlocked: lesson.isUnlocked !== undefined ? lesson.isUnlocked : true,
-                  content: content, // Include all content fields
-                  // Map resources to include required 'type' field
+                  content,
                   resources: (lesson.resources || []).map((resource: any) => ({
                     name: resource.name || resource.originalName || 'Untitled',
                     type: resource.type || getResourceType(resource.name || resource.originalName || ''),
@@ -782,51 +726,89 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                   }))
                 };
               })
-          })) : [],
-        // Add other step data as needed
-        status: 'Draft' as const
-      };
+          }))
+      : [];
 
-      // Debug: Log what we're saving
-      console.log('💾 Saving draft with data:', {
-        courseId,
-        hasTitle: !!title,
-        modulesCount: draftData.modules?.length || 0,
-        totalLessons: draftData.modules?.reduce((sum: number, m: any) => sum + (m.lessons?.length || 0), 0) || 0,
-        modules: draftData.modules
+    return {
+      name: title || 'Untitled course',
+      subtitle: subtitle || '',
+      description: description || (title ? `Course: ${title}` : 'Course description will be added later'),
+      category: category || 'NA',
+      level: (level || 'NA') as 'Beginner' | 'Intermediate' | 'Advanced' | 'NA',
+      language: language || 'NA',
+      tags: tags || [],
+      visibility: (visibility || 'Public') as 'Public' | 'Unlisted' | 'Private',
+      coverImage: cover || null,
+      modules: preparedModules,
+      status: 'Draft' as const
+    };
+  }, [modules, title, subtitle, description, category, level, language, tags, visibility, cover, getResourceType]);
+
+  const logDraftSummary = React.useCallback(
+    (mode: 'manual' | 'auto', payload: any) => {
+      if (process.env.NODE_ENV === 'production') {
+        return;
+      }
+
+      const modulesCount = payload.modules?.length || 0;
+      const totalLessons = payload.modules?.reduce((sum: number, module: any) => sum + (module.lessons?.length || 0), 0) || 0;
+
+      console.log(`💾 ${mode === 'manual' ? 'Manual' : 'Auto'} Save Draft - Summary:`, {
+        courseId: courseId || 'new',
+        hasTitle: !!payload.name && payload.name !== 'Untitled course',
+        modulesCount,
+        totalLessons
       });
+    },
+    [courseId]
+  );
+
+  // Save draft function (reusable for auto-save and before navigation)
+  const saveDraftBeforeLeave = React.useCallback(async (silent: boolean = false): Promise<boolean> => {
+    const hasModules = modules && modules.length > 0 && modules.some(m => m.title && m.title.trim() !== '');
+    const hasLessons = modules && modules.some(m => m.lessons && m.lessons.length > 0);
+    if (!title && !subtitle && !description && !category && !hasModules && !hasLessons) {
+      return true;
+    }
+
+    try {
+      if (!silent) {
+        setIsSavingBeforeLeave(true);
+      }
+
+      const draftData = buildDraftPayload();
+      logDraftSummary('auto', draftData);
 
       const result = await courseService.saveDraft(courseId, draftData as any);
-      
+
       if (result.success && result.data) {
         if (!courseId && result.data._id) {
           setCourseId(result.data._id);
         }
-      setLastSaved(new Date());
+        setLastSaved(new Date());
         hasUnsavedChanges.current = false;
         if (!silent) {
           success('Draft saved successfully!');
-          console.log('✅ Draft saved successfully!', {
-            courseId: result.data._id || courseId,
-            modulesCount: result.data.modules?.length || 0
-          });
         }
         return true;
-      } else {
-        if (!silent) {
-          error(result.message || 'Failed to save draft');
-        }
-        return false;
       }
-    } catch (error) {
-      console.error('Failed to save draft before leaving:', error);
+
+      if (!silent) {
+        error(result.message || 'Failed to save draft');
+      }
+      return false;
+    } catch (saveError) {
+      console.error('Failed to save draft before leaving:', saveError);
+      if (!silent) {
+        error('Failed to save draft before leaving');
+      }
       return false;
     } finally {
       if (!silent) {
         setIsSavingBeforeLeave(false);
       }
     }
-  }, [title, subtitle, description, category, level, language, tags, visibility, cover, courseId, modules]);
+  }, [modules, title, subtitle, description, category, buildDraftPayload, logDraftSummary, courseId, setLastSaved, success, error]);
 
   // Auto-save function
   const handleAutoSave = async () => {
@@ -840,235 +822,37 @@ const CourseBuilderPage: React.FC = React.memo(() => {
 
   // Save as draft function
   const handleSaveDraft = async () => {
+    if (saving) {
+      return;
+    }
+
     setSaving(true);
     try {
-      console.log('Saving draft...');
-      const { courseService } = await import('../../services/courseService');
-      
-      // Helper function to determine resource type from file name/extension
-      const getResourceType = (fileName: string): 'document' | 'image' | 'video' | 'audio' | 'archive' | 'other' => {
-        const ext = fileName.split('.').pop()?.toLowerCase() || '';
-        
-        // Image types
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
-          return 'image';
-        }
-        
-        // Video types
-        if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(ext)) {
-          return 'video';
-        }
-        
-        // Audio types
-        if (['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'].includes(ext)) {
-          return 'audio';
-        }
-        
-        // Document types
-        if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp'].includes(ext)) {
-          return 'document';
-        }
-        
-        // Archive types
-        if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) {
-          return 'archive';
-        }
-        
-        // Default to 'other'
-        return 'other';
-      };
-      
-      // Prepare complete course data from all steps
-      // Use "NA" for mandatory fields that are not filled (abrupt exit scenario)
-      const draftData = {
-        name: title || 'Untitled course',
-        subtitle: subtitle || '',
-        description: description || (title ? `Course: ${title}` : 'Course description will be added later'),
-        category: category || 'NA', // Use "NA" for abrupt exit
-        level: (level || 'NA') as 'Beginner' | 'Intermediate' | 'Advanced' | 'NA',
-        language: language || 'NA', // Use "NA" for abrupt exit
-        tags: tags || [],
-        visibility: (visibility || 'Public') as 'Public' | 'Unlisted' | 'Private',
-        coverImage: cover || null,
-        // Step 1: Curriculum - Map frontend format to backend format
-        // Only include modules if they exist and have at least a title
-        modules: modules && modules.length > 0 ? modules
-          .filter(module => module.title && module.title.trim() !== '')
-          .map((module, moduleIndex) => ({
-            title: module.title,
-            description: module.description || '',
-            order: module.order !== undefined ? module.order : moduleIndex + 1,
-            lessons: (module.lessons || [])
-              .filter(lesson => lesson.title && lesson.title.trim() !== '')
-              .map((lesson, lessonIndex) => {
-                const lessonData: any = lesson;
-                // Build content object with pre/post class messages
-                const content: any = lesson.content || {};
-                
-                // Add pre/post class messages to content (for all lesson types)
-                if (lessonData.preClassMessage) {
-                  content.preClassMessage = lessonData.preClassMessage;
-                }
-                if (lessonData.postClassMessage) {
-                  content.postClassMessage = lessonData.postClassMessage;
-                }
-                
-                // For Video lessons, include video and thumbnail URLs in content
-                if (lesson.type === 'Video' && lessonData.videos && lessonData.videos.length > 0) {
-                  // Use the first video-thumbnail pair
-                  const firstVideo = lessonData.videos[0];
-                  if (firstVideo.video?.url) {
-                    content.videoUrl = firstVideo.video.url;
-                  }
-                  if (firstVideo.thumbnail?.url) {
-                    content.thumbnailUrl = firstVideo.thumbnail.url;
-                  }
-                }
-                
-                // For Audio lessons, include audio metadata in content
-                if (lesson.type === 'Audio' && lessonData.audioFiles && lessonData.audioFiles.length > 0) {
-                  const mappedAudioFiles = lessonData.audioFiles
-                    .filter((audio: any) => audio && audio.url)
-                    .map((audio: any) => ({
-                      url: audio.url,
-                      name: audio.name || (audio.url?.split('/').pop() || 'Audio'),
-                      size: audio.size || 0,
-                      storagePath: audio.storagePath || audio.path
-                    }));
-                  
-                  if (mappedAudioFiles.length > 0) {
-                    content.audioFiles = mappedAudioFiles;
-                    content.audioUrl = mappedAudioFiles[0].url;
-                  }
-                }
-                
-                // For Live lessons, also include live-specific fields in content
-                if (lesson.type === 'Live' && lessonData.liveFields) {
-                  content.meetingLink = lessonData.liveFields.customLink || '';
-                  content.meetingPlatform = lessonData.liveFields.meetingLink || 'Custom Link';
-                  if (lessonData.liveFields.startDateTime) {
-                    content.startDateTime = new Date(lessonData.liveFields.startDateTime);
-                  }
-                  if (lessonData.liveFields.duration) {
-                    const duration = parseInt(lessonData.liveFields.duration) || 0;
-                    if (content.startDateTime) {
-                      content.endDateTime = new Date(new Date(content.startDateTime).getTime() + duration * 60000);
-                    }
-                  }
-                }
-                
-                // For Quiz lessons, include quiz questions in content
-                if (lesson.type === 'Quiz' && lessonData.quizQuestions && Array.isArray(lessonData.quizQuestions) && lessonData.quizQuestions.length > 0) {
-                  content.questions = lessonData.quizQuestions
-                    .filter((q: any) => q && q.question && q.question.trim() !== '') // Filter out empty questions
-                    .map((q: any) => {
-                      const options = q.options?.filter((opt: any) => opt && opt.text && opt.text.trim() !== '') || [];
-                      const optionTexts = options.map((opt: any) => opt.text.trim());
-                      
-                      // Determine correct answer(s)
-                      let correctAnswer: string | string[] = '';
-                      if (q.type === 'single') {
-                        // Single choice: find the first correct option
-                        const correctOption = options.find((opt: any) => opt.isCorrect);
-                        correctAnswer = correctOption ? correctOption.text.trim() : (optionTexts[0] || '');
-                      } else if (q.type === 'multiple') {
-                        // Multiple choice: get all correct options
-                        correctAnswer = options
-                          .filter((opt: any) => opt.isCorrect)
-                          .map((opt: any) => opt.text.trim());
-                        // If no correct answers selected, default to first option
-                        if (correctAnswer.length === 0 && optionTexts.length > 0) {
-                          correctAnswer = [optionTexts[0]];
-                        }
-                      }
-                      
-                      return {
-                        question: q.question.trim(),
-                        type: q.type === 'single' ? 'multiple-choice' : q.type === 'multiple' ? 'multiple-choice' : 'text',
-                        options: optionTexts,
-                        correctAnswer: correctAnswer,
-                        points: q.points || 10,
-                        explanation: q.explanation ? q.explanation.trim() : undefined
-                      };
-                    });
-                  
-                  // Add quiz metadata if available
-                  if (lessonData.timeLimit) {
-                    content.timeLimit = parseInt(lessonData.timeLimit) || 30;
-                  }
-                  if (lessonData.passingScore) {
-                    content.passingScore = parseInt(lessonData.passingScore) || 70;
-                  }
-                }
-                
-                // For Assignment lessons, include assignment fields in content
-                if (lesson.type === 'Assignment' && lessonData.assignmentFields) {
-                  const assignmentFields = lessonData.assignmentFields;
-                  if (assignmentFields.instructions) {
-                    content.instructions = assignmentFields.instructions;
-                  }
-                  if (assignmentFields.submissionType) {
-                    content.submissionType = assignmentFields.submissionType;
-                  }
-                  if (assignmentFields.maxFileSize) {
-                    content.maxFileSize = parseInt(assignmentFields.maxFileSize.toString()) || 10;
-                  }
-                  if (assignmentFields.allowedFileTypes && Array.isArray(assignmentFields.allowedFileTypes)) {
-                    content.allowedFileTypes = assignmentFields.allowedFileTypes.filter((t: string) => t && t.trim() !== '');
-                  }
-                }
-                
-                return {
-                  title: lesson.title,
-                  description: lesson.description || '',
-                  type: lesson.type || 'Video',
-                  duration: lesson.duration || 0,
-                  order: lesson.order !== undefined ? lesson.order : lessonIndex + 1,
-                  isUnlocked: lesson.isUnlocked !== undefined ? lesson.isUnlocked : true,
-                  content: content, // Include pre/post class messages and other content
-                  // Map resources to include required 'type' field
-                  resources: (lessonData.resources || []).map((resource: any) => ({
-                    name: resource.name || resource.originalName || 'Untitled',
-                    type: resource.type || getResourceType(resource.name || resource.originalName || ''),
-                    url: resource.url || resource.path || '',
-                    size: resource.size || 0,
-                    downloadCount: resource.downloadCount || 0
-                  }))
-                };
-              })
-          })) : [],
-        // Add other step data as needed - this will be expanded when we integrate all steps
-        status: 'Draft' as const
-      };
-      
-      // Debug: Log what we're saving
-      console.log('💾 Manual Save Draft - Data being saved:', {
-        courseId,
-        hasTitle: !!title,
-        modulesCount: draftData.modules?.length || 0,
-        totalLessons: draftData.modules?.reduce((sum: number, m: any) => sum + (m.lessons?.length || 0), 0) || 0,
-        modules: draftData.modules
-      });
+      const draftData = buildDraftPayload();
+      logDraftSummary('manual', draftData);
 
       const result = await courseService.saveDraft(courseId, draftData as any);
-      
+
       if (result.success) {
         if (result.data && result.data._id && !courseId) {
           setCourseId(result.data._id);
         }
-      setLastSaved(new Date());
-      console.log('Draft saved successfully');
+        setLastSaved(new Date());
+        hasUnsavedChanges.current = false;
         success('Draft saved successfully!');
+        console.log('Draft saved successfully');
       } else {
         console.error('Save draft failed:', result.message);
         error(result.message || 'Failed to save draft');
       }
-    } catch (error) {
-      console.error('Save draft failed:', error);
+    } catch (err) {
+      console.error('Save draft failed:', err);
+      error('Failed to save draft');
     } finally {
       setSaving(false);
     }
   };
+
 
   // Next step
   const handleNext = () => {
