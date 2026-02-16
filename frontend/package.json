@@ -21,6 +21,7 @@
     "framer-motion": "^11.18.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.0",
@@ -31,6 +32,7 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@types/webpack-env": "^1.18.8",
     "axios": "^1.6.7",
     "eslint": "^8.56.0",
@@ -42,6 +44,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:e2e": "playwright test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

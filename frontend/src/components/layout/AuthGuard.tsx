@@ -5,7 +5,7 @@ import ProtectedLayout from './ProtectedLayout';
 import { Box, CircularProgress } from '@mui/material';
 
 const AuthGuard: React.FC = () => {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {

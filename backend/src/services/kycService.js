@@ -2,8 +2,39 @@ const KYCDocument = require('../models/KYCDocument');
 const KYCProfile = require('../models/KYCProfile');
 const User = require('../models/User');
 const fileStorage = require('../utils/fileStorage');
+const s3Service = require('./s3Service');
+const { isS3Configured } = require('../config/s3Config');
 
 class KYCService {
+  /**
+   * Upload KYC file to S3. Path: users/{userId}/kyc/{documentType}/{filename}
+   * @param {Object} file - Multer file { buffer, originalname, mimetype, size }
+   * @param {string} userId - User ID
+   * @param {string} documentType - pan_card | aadhar_card | passport | driving_license | voter_id | other
+   * @returns {Promise<{ fileName, originalFileName, filePath, s3Key, fileSize, mimeType }>}
+   */
+  async uploadKycFileToS3(file, userId, documentType) {
+    const validation = s3Service.validateFile(file, 'kyc');
+    if (!validation.isValid) {
+      throw new Error(validation.errors.join('; '));
+    }
+    const filename = s3Service.generateUniqueFilename(file.originalname);
+    const s3Key = s3Service.generateS3Key('user', userId, 'kyc', documentType, filename);
+    await s3Service.uploadFile(file.buffer, s3Key, file.mimetype, {
+      originalname: filename,
+      documentType,
+      userId: String(userId)
+    });
+    return {
+      fileName: filename,
+      originalFileName: file.originalname,
+      filePath: s3Key,
+      s3Key,
+      fileSize: file.size,
+      mimeType: file.mimetype
+    };
+  }
+
   // Get KYC profile for user
   async getKYCProfile(userId) {
     try {
@@ -87,11 +118,13 @@ class KYCService {
         throw new Error('User not found');
       }
 
-      // Save file to storage
-      const fileInfo = await fileStorage.saveFile(file, userId, documentType);
+      // Save file to S3 or local storage
+      const fileInfo = isS3Configured()
+        ? await this.uploadKycFileToS3(file, userId, documentType)
+        : await fileStorage.saveFile(file, userId, documentType);
 
       // Create or update KYC document
-      const kycDocument = new KYCDocument({
+      const docPayload = {
         userId,
         documentType,
         documentName,
@@ -101,7 +134,9 @@ class KYCService {
         filePath: fileInfo.filePath,
         fileSize: fileInfo.fileSize,
         mimeType: fileInfo.mimeType
-      });
+      };
+      if (fileInfo.s3Key) docPayload.s3Key = fileInfo.s3Key;
+      const kycDocument = new KYCDocument(docPayload);
 
       await kycDocument.save();
 
@@ -171,17 +206,25 @@ class KYCService {
 
       // Only update file if a new file is uploaded
       if (file) {
-        // Archive old file
-        if (document.filePath) {
+        if (document.s3Key) {
+          try {
+            await s3Service.deleteFile(document.s3Key);
+          } catch (err) {
+            console.warn('KYC update: could not delete old S3 file:', document.s3Key, err.message);
+          }
+          document.s3Key = null;
+        } else if (document.filePath) {
           await fileStorage.archiveFile(document.filePath, 'document_update');
         }
-        // Save new file
-        const fileInfo = await fileStorage.saveFile(file, userId, document.documentType);
+        const fileInfo = isS3Configured()
+          ? await this.uploadKycFileToS3(file, userId, document.documentType)
+          : await fileStorage.saveFile(file, userId, document.documentType);
         document.fileName = fileInfo.fileName;
         document.originalFileName = fileInfo.originalFileName;
         document.filePath = fileInfo.filePath;
         document.fileSize = fileInfo.fileSize;
         document.mimeType = fileInfo.mimeType;
+        if (fileInfo.s3Key) document.s3Key = fileInfo.s3Key;
         document.status = 'pending'; // Reset status for re-verification
       }
       // Always update name/number if provided
@@ -203,8 +246,13 @@ class KYCService {
         throw new Error('Document not found');
       }
 
-      // Archive file
-      if (document.filePath) {
+      if (document.s3Key) {
+        try {
+          await s3Service.deleteFile(document.s3Key);
+        } catch (err) {
+          console.warn('KYC delete: could not delete S3 file:', document.s3Key, err.message);
+        }
+      } else if (document.filePath) {
         await fileStorage.archiveFile(document.filePath, 'document_deletion');
       }
 
@@ -457,6 +505,7 @@ class KYCService {
       filePath: doc.filePath,
       fileName: doc.fileName,
       mimeType: doc.mimeType,
+      s3Key: doc.s3Key || null
     };
   }
 

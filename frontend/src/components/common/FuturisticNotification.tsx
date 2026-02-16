@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, Box, Typography, Button, IconButton, styled } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { WarningAmberRounded, CheckCircleOutlineRounded, ErrorOutlineRounded, Close, InfoOutlined } from '@mui/icons-material';
 
 const modalVariants = {

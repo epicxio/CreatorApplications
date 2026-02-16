@@ -8,10 +8,11 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  hasPermission: (resource: string, action: string) => boolean;
-  login: (token: string) => void;
+  hasPermission: (_resource: string, _action: string) => boolean;
+  login: (_token: string) => void;
   logout: () => void;
-  updateUser: (data: Partial<User>) => Promise<void>;
+  updateUser: (_data: Partial<User>) => Promise<void>;
+  setUser: (_user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,8 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const currentUser = await authService.getProfile();
         setUser(currentUser);
       }
-    } catch (error) {
-      console.error("Failed to initialize auth:", error);
+    } catch {
       localStorage.removeItem('token');
     } finally {
       setLoading(false);
@@ -45,8 +45,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       const currentUser = await authService.getProfile();
       setUser(currentUser);
-    } catch (error) {
-      console.error("Failed to login:", error);
+    } catch {
+      // Login failed
     } finally {
       setLoading(false);
     }
@@ -88,13 +88,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const updatedUser = await userService.updateUser(user._id, updateData);
       setUser(updatedUser);
     } catch (error) {
-      console.error("Failed to update user:", error);
       throw error;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, hasPermission, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, hasPermission, login, logout, updateUser, setUser }}>
       {children}
     </AuthContext.Provider>
   );

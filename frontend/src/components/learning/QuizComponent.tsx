@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -8,8 +8,6 @@ import {
   RadioGroup,
   FormControlLabel,
   FormControl,
-  FormLabel,
-  Checkbox,
   TextField,
   Stack,
   LinearProgress,
@@ -18,11 +16,6 @@ import {
   CardContent,
   Chip,
   Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
   CircularProgress
 } from '@mui/material';
 import {
@@ -30,10 +23,8 @@ import {
   Cancel as CancelIcon,
   Timer as TimerIcon,
   Refresh as RefreshIcon,
-  Visibility as ViewResultsIcon,
-  Close as CloseIcon
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import quizService, {
   QuizQuestion,
   QuizMetadata,
@@ -47,7 +38,7 @@ import ToastNotification from '../common/ToastNotification';
 interface QuizComponentProps {
   courseId: string;
   lessonId: string;
-  onComplete?: (passed: boolean, score: number) => void;
+  onComplete?: (_passed: boolean, _score: number) => void;
 }
 
 const QuizComponent: React.FC<QuizComponentProps> = ({
@@ -62,12 +53,12 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<QuizResult[] | null>(null);
-  const [showResults, setShowResults] = useState(false);
+  const [, setShowResults] = useState(false);
   const [previousAttempts, setPreviousAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<Date | null>(null);
-  const [activeSubmission, setActiveSubmission] = useState<{ submissionId: string; timeRemaining: number | null } | null>(null);
+  const [, setStartedAt] = useState<Date | null>(null);
+  const [, setActiveSubmission] = useState<{ submissionId: string; timeRemaining: number | null } | null>(null);
   
   const { toast, success, error: showError, hideToast } = useToast();
 
@@ -115,6 +106,7 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
     };
 
     loadQuiz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- courseId, lessonId are the triggers
   }, [courseId, lessonId, showError]);
 
   // Start quiz attempt
@@ -160,6 +152,7 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSubmit intentionally excluded to avoid loop
   }, [timeRemaining, submissionId, results]);
 
   // Handle answer change
@@ -170,8 +163,8 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
     }));
   };
 
-  // Handle multiple choice answer
-  const handleMultipleChoiceChange = (questionId: string, option: string, checked: boolean) => {
+  // Handle multiple choice answer (for multi-select questions)
+  const _handleMultipleChoiceChange = (questionId: string, option: string, checked: boolean) => {
     setAnswers(prev => {
       const current = prev[questionId] as string[] || [];
       if (checked) {

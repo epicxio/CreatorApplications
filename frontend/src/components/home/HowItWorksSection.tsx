@@ -1,16 +1,7 @@
-import { Box, Typography, Container, styled, keyframes } from '@mui/material';
+import { Box, Typography, Container, styled } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { PersonAdd, Create, Link as LinkIcon, Share, CheckCircle } from '@mui/icons-material';
-
-const drawLine = keyframes`
-  from {
-    stroke-dashoffset: 1000;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-`;
+import { PersonAdd, Create, Link as LinkIcon, Share } from '@mui/icons-material';
 
 const SectionContainer = styled(Container)`
   padding: 8rem 2rem;

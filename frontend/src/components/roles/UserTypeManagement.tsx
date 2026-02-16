@@ -23,18 +23,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Switch,
-  FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Security as SecurityIcon,
-  ExpandMore as ExpandMoreIcon,
   WorkOutline,
   StarOutline,
   StorefrontOutlined,
@@ -57,7 +51,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   minHeight: '100vh',
 }));
 
-const PermissionChip = styled(Chip)(({ theme }) => ({
+const _PermissionChip = styled(Chip)(({ theme }) => ({
   margin: theme.spacing(0.5),
   background: 'rgba(255, 255, 255, 0.8)',
   backdropFilter: 'blur(10px)',
@@ -86,7 +80,7 @@ const colorOptions = [
   { value: 'error', label: 'Error' },
 ];
 
-const permissionIcons: { [key: string]: React.ReactElement } = {
+const _permissionIcons: { [key: string]: React.ReactElement } = {
   user: <PersonOutline color="primary" />,
   role: <SecurityIcon color="primary" />,
   content: <ArticleOutlined color="primary" />,
@@ -141,9 +135,8 @@ const UserTypeManagement: React.FC = () => {
       setError(null);
       const data = await userTypeService.getUserTypes();
       setUserTypes(data);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch user types. Please try again.');
-      console.error('Error fetching user types:', err);
     } finally {
       setLoading(false);
     }
@@ -176,9 +169,8 @@ const UserTypeManagement: React.FC = () => {
       try {
         await userTypeService.deleteUserType(userTypeId);
         await fetchUserTypes();
-      } catch (err) {
+      } catch {
         setError('Failed to delete user type. Please try again.');
-        console.error('Error deleting user type:', err);
       }
     }
   };
@@ -192,9 +184,8 @@ const UserTypeManagement: React.FC = () => {
       }
       setOpenDialog(false);
       await fetchUserTypes();
-    } catch (err) {
+    } catch {
       setError('Failed to save user type. Please try again.');
-      console.error('Error saving user type:', err);
     }
   };
 

@@ -15,9 +15,6 @@ const PublicRoute: React.FC = () => {
     );
   }
 
-  // Debug: log the user object to check the role name
-  console.log('User object:', user);
-
   // Only redirect to /get-to-know if coming from / or /login
   if (isAuthenticated) {
     // Check for Learner role - redirect to get-to-know page

@@ -1,20 +1,20 @@
 import { 
   Course, 
-  Module, 
-  Lesson, 
   Progress, 
   Comment, 
-  Note, 
   CourseFilters, 
-  CourseSearchResult,
   CourseListResponse,
   CourseDetailResponse,
   ProgressResponse,
-  EnrollmentResponse
+  EnrollmentResponse,
+  CheckoutResponse,
+  AffiliateCodesResponse,
+  CreateAffiliateCodeResponse
 } from '../types/course';
 import api from './api';
 
-// Mock course data based on the structure from CourseBuilderPage
+// Mock course data (kept for reference; enrollment/progress now use API)
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
 const mockCourses: Course[] = [
   {
     id: '1',
@@ -319,7 +319,8 @@ const mockCourses: Course[] = [
   }
 ];
 
-// Mock progress data
+// Mock progress data (kept for reference; progress now from API)
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
 const mockProgress: Progress[] = [
   {
     courseId: '1',
@@ -408,10 +409,15 @@ class CourseService {
         modules: course.modules || [],
         certificateEnabled: course.certificateEnabled,
         dripEnabled: course.dripEnabled,
+        installmentsOn: course.installmentsOn ?? false,
+        affiliateActive: course.affiliateActive ?? false,
         listedPrice: course.listedPrice || { INR: 0, USD: 0, EUR: 0 },
         sellingPrice: course.sellingPrice || { INR: 0, USD: 0, EUR: 0 },
         enrollments: course.enrollments || 0,
-        completionRate: course.completionRate || 0
+        completionRate: course.completionRate || 0,
+        creatorId: course.creatorId ?? undefined,
+        creatorName: course.creatorName ?? undefined,
+        instructorUserId: course.instructorUserId ?? undefined
       }));
 
       return {
@@ -425,7 +431,6 @@ class CourseService {
         }
       };
     } catch (error: any) {
-      console.error('Error fetching courses:', error);
       return {
         success: false,
         data: {
@@ -447,8 +452,17 @@ class CourseService {
       
       // Transform backend course to frontend format
       const courseData = response.data.data;
+      const rawModules = courseData.modules || [];
+      const modules = rawModules.map((mod: any) => ({
+        ...mod,
+        lessons: (mod.lessons || []).map((lesson: any) => ({
+          ...lesson,
+          id: lesson.id ?? (lesson._id != null ? String(lesson._id) : undefined)
+        }))
+      }));
       const course: Course = {
         id: courseData._id || courseData.id,
+        courseId: courseData.courseId, // Formatted course ID like "C-ADM-0001"
         name: courseData.name,
         subtitle: courseData.subtitle || '',
         description: courseData.description || '',
@@ -467,13 +481,38 @@ class CourseService {
         createdAt: courseData.createdAt || new Date().toISOString(),
         lastUpdated: courseData.lastUpdated || new Date().toISOString(),
         duration: courseData.duration || 0,
-        modules: courseData.modules || [],
+        modules,
         certificateEnabled: courseData.certificateEnabled || false,
+        certificateTemplate: courseData.certificateTemplate || '1',
+        certificateTemplatePdfUrl: courseData.certificateTemplatePdfUrl || undefined,
+        certificateTitle: courseData.certificateTitle || 'Certificate of Completion',
+        certificateDescription: courseData.certificateDescription || 'This is to certify that [Name] has successfully completed the course',
+        certificateCompletionPercentage: courseData.certificateCompletionPercentage ?? 100,
+        certificateApplicationLogoEnabled: courseData.certificateApplicationLogoEnabled !== false,
+        certificateApplicationLogo: courseData.certificateApplicationLogo || undefined,
+        certificateSignatures: courseData.certificateSignatures || [],
+        certificateCreatorLogo: courseData.certificateCreatorLogo || undefined,
         dripEnabled: courseData.dripEnabled || false,
-        listedPrice: courseData.listedPrice || { INR: 0, USD: 0, EUR: 0 },
-        sellingPrice: courseData.sellingPrice || { INR: 0, USD: 0, EUR: 0 },
+        listedPrice: courseData.listedPrice || { INR: 0, USD: 0, EUR: 0, GBP: 0 },
+        sellingPrice: courseData.sellingPrice || { INR: 0, USD: 0, EUR: 0, GBP: 0 },
         enrollments: courseData.enrollments || 0,
-        completionRate: courseData.completionRate || 0
+        completionRate: courseData.completionRate || 0,
+        paymentMethods: courseData.paymentMethods || undefined,
+        enabledCurrencies: courseData.enabledCurrencies || undefined,
+        requirePaymentBeforeAccess: courseData.requirePaymentBeforeAccess,
+        sendPaymentReceipts: courseData.sendPaymentReceipts,
+        enableAutomaticInvoicing: courseData.enableAutomaticInvoicing,
+        globalPricingEnabled: courseData.globalPricingEnabled,
+        currencySpecificPricingEnabled: courseData.currencySpecificPricingEnabled,
+        installmentsOn: courseData.installmentsOn,
+        installmentPeriod: courseData.installmentPeriod,
+        numberOfInstallments: courseData.numberOfInstallments,
+        bufferTime: courseData.bufferTime,
+        faqs: courseData.faqs || [],
+        affiliateActive: courseData.affiliateActive,
+        affiliateRewardPercentage: courseData.affiliateRewardPercentage,
+        watermarkRemovalEnabled: courseData.watermarkRemovalEnabled,
+        publishHistory: courseData.publishHistory || []
       };
 
       return {
@@ -481,7 +520,6 @@ class CourseService {
         data: course
       };
     } catch (error: any) {
-      console.error('Error fetching course:', error);
       return {
         success: false,
         data: {} as Course,
@@ -500,7 +538,6 @@ class CourseService {
         message: response.data.message || 'Course created successfully'
       };
     } catch (error: any) {
-      console.error('Error creating course:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create course'
@@ -519,7 +556,6 @@ class CourseService {
         message: response.data.message || 'Draft saved successfully'
       };
     } catch (error: any) {
-      console.error('Error saving draft:', error);
       
       // Handle network errors
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
@@ -554,7 +590,6 @@ class CourseService {
         message: response.data.message || 'Course updated successfully'
       };
     } catch (error: any) {
-      console.error('Error updating course:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to update course'
@@ -572,7 +607,6 @@ class CourseService {
         message: response.data.message || 'Course published successfully'
       };
     } catch (error: any) {
-      console.error('Error publishing course:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to publish course'
@@ -589,7 +623,6 @@ class CourseService {
         message: response.data.message || 'Course deleted successfully'
       };
     } catch (error: any) {
-      console.error('Error deleting course:', error);
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete course'
@@ -597,131 +630,256 @@ class CourseService {
     }
   }
 
-  // Enroll in course
-  async enrollCourse(courseId: string, userId: string): Promise<EnrollmentResponse> {
+  // Checkout: record payment (simulate paid) and enroll (no gateway yet). Pass affiliateCode when user came via ?ref=CODE.
+  async placeOrder(courseId: string, paymentMethod: string, currency: string = 'INR', affiliateCode?: string): Promise<CheckoutResponse> {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Check if course exists
-      const course = mockCourses.find(c => c.id === courseId);
-      if (!course) {
-        return {
-          success: false,
-          data: {
-            courseId,
-            userId,
-            enrolledAt: new Date().toISOString()
-          },
-          message: 'Course not found'
-        };
-      }
-
-      // Check if already enrolled
-      const existingProgress = mockProgress.find(p => p.courseId === courseId && p.userId === userId);
-      if (existingProgress) {
-        return {
-          success: false,
-          data: {
-            courseId,
-            userId,
-            enrolledAt: existingProgress.enrolledAt
-          },
-          message: 'Already enrolled in this course'
-        };
-      }
-
-      // Add to progress
-      const newProgress: Progress = {
-        courseId,
-        userId,
-        overallProgress: 0,
-        completedLessons: [],
-        timeSpent: 0,
-        lastAccessed: new Date().toISOString(),
-        enrolledAt: new Date().toISOString()
-      };
-      mockProgress.push(newProgress);
-
+      const body: { paymentMethod: string; currency: string; affiliateCode?: string } = { paymentMethod, currency };
+      if (affiliateCode && affiliateCode.trim()) body.affiliateCode = affiliateCode.trim();
+      const response = await api.post(`/courses/${courseId}/checkout`, body);
+      const data = response.data;
       return {
-        success: true,
-        data: {
-          courseId,
-          userId,
-          enrolledAt: newProgress.enrolledAt
-        }
+        success: data.success !== false,
+        data: data.data
+          ? {
+              orderId: data.data.orderId,
+              courseId: data.data.courseId,
+              userId: data.data.userId,
+              enrolledAt: data.data.enrolledAt,
+              alreadyEnrolled: data.data.alreadyEnrolled
+            }
+          : { orderId: '', courseId, userId: '', enrolledAt: new Date().toISOString() },
+        message: data.message
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
         data: {
+          orderId: '',
           courseId,
-          userId,
+          userId: '',
           enrolledAt: new Date().toISOString()
         },
-        message: 'Failed to enroll in course'
+        message: error.response?.data?.message || 'Checkout failed'
       };
     }
   }
 
-  // Get user's progress for a course
-  async getProgress(courseId: string, userId: string): Promise<ProgressResponse> {
+  // Affiliate: list affiliates for a course (creator only)
+  async getAffiliatesByCourse(courseId: string): Promise<AffiliateCodesResponse> {
     try {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      const response = await api.get(`/courses/${courseId}/affiliate`);
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        data: Array.isArray(data.data) ? data.data : [],
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: [],
+        message: error.response?.data?.message || 'Failed to fetch affiliates'
+      };
+    }
+  }
 
-      const progress = mockProgress.find(p => p.courseId === courseId && p.userId === userId);
-      
-      if (!progress) {
+  // Affiliate: current user's affiliate codes (my codes)
+  async getMyAffiliateCodes(): Promise<AffiliateCodesResponse> {
+    try {
+      const response = await api.get('/courses/my-affiliate-codes');
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        data: Array.isArray(data.data) ? data.data : [],
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: [],
+        message: error.response?.data?.message || 'Failed to fetch affiliate codes'
+      };
+    }
+  }
+
+  // Affiliate: create (or get existing) affiliate code for a course
+  async createAffiliateCode(courseId: string, displayName?: string): Promise<CreateAffiliateCodeResponse> {
+    try {
+      const response = await api.post(`/courses/${courseId}/affiliate`, displayName ? { displayName } : {});
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        data: data.data || {},
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: {} as CreateAffiliateCodeResponse['data'],
+        message: error.response?.data?.message || 'Failed to create affiliate code'
+      };
+    }
+  }
+
+  // Enroll in course (calls backend API) - use for free courses
+  async enrollCourse(courseId: string, _userId: string): Promise<EnrollmentResponse> {
+    try {
+      const response = await api.post(`/courses/${courseId}/enroll`);
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        data: data.data
+          ? {
+              courseId: data.data.courseId,
+              userId: data.data.userId,
+              enrolledAt: data.data.enrolledAt
+            }
+          : { courseId, userId: _userId, enrolledAt: new Date().toISOString() },
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: {
+          courseId,
+          userId: _userId,
+          enrolledAt: new Date().toISOString()
+        },
+        message: error.response?.data?.message || 'Failed to enroll in course'
+      };
+    }
+  }
+
+  // Get current user's progress for all enrolled courses (calls backend API)
+  async getMyProgress(): Promise<{ success: boolean; data: Progress[]; message?: string }> {
+    try {
+      const response = await api.get('/courses/my-progress');
+      const data = response.data;
+      if (data.success && Array.isArray(data.data)) {
         return {
-          success: false,
-          data: {} as Progress,
-          message: 'Progress not found'
+          success: true,
+          data: data.data.map((p: any) => ({
+            courseId: p.courseId,
+            userId: p.userId,
+            overallProgress: p.overallProgress ?? 0,
+            completedLessons: p.completedLessons ?? [],
+            timeSpent: p.timeSpent ?? 0,
+            lastAccessed: p.lastAccessed ?? new Date().toISOString(),
+            enrolledAt: p.enrolledAt ?? new Date().toISOString(),
+            completedAt: p.completedAt,
+            certificateEarned: p.certificateEarned,
+            certificateUrl: p.certificateUrl,
+            certificateIssuedAt: p.certificateIssuedAt
+          }))
         };
       }
-
+      return { success: true, data: [] };
+    } catch (error: any) {
       return {
-        success: true,
-        data: progress
+        success: false,
+        data: [],
+        message: error.response?.data?.message || 'Failed to fetch progress'
       };
-    } catch (error) {
+    }
+  }
+
+  // Get user's progress for a course (calls backend API)
+  async getProgress(courseId: string, _userId: string): Promise<ProgressResponse> {
+    try {
+      const response = await api.get(`/courses/${courseId}/progress`);
+      const data = response.data;
+      if (data.success && data.data) {
+        return {
+          success: true,
+          data: {
+            courseId: data.data.courseId,
+            userId: data.data.userId,
+            overallProgress: data.data.overallProgress ?? 0,
+            completedLessons: data.data.completedLessons ?? [],
+            timeSpent: data.data.timeSpent ?? 0,
+            lastAccessed: data.data.lastAccessed,
+            enrolledAt: data.data.enrolledAt,
+            completedAt: data.data.completedAt,
+            certificateEarned: data.data.certificateEarned,
+            certificateUrl: data.data.certificateUrl,
+            certificateIssuedAt: data.data.certificateIssuedAt,
+            certificateEarnedAt: data.data.certificateEarnedAt
+          }
+        };
+      }
       return {
         success: false,
         data: {} as Progress,
-        message: 'Failed to fetch progress'
+        message: data.message || 'Progress not found'
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: {} as Progress,
+        message: error.response?.data?.message || 'Failed to fetch progress'
       };
     }
   }
 
-  // Update lesson completion
-  async completeLesson(courseId: string, lessonId: string, userId: string): Promise<{ success: boolean; message?: string }> {
+  // Update lesson completion (calls backend API)
+  async completeLesson(courseId: string, lessonId: string, _userId: string): Promise<{ success: boolean; message?: string }> {
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const progress = mockProgress.find(p => p.courseId === courseId && p.userId === userId);
-      if (!progress) {
-        return {
-          success: false,
-          message: 'Progress not found'
-        };
-      }
-
-      if (!progress.completedLessons.includes(lessonId)) {
-        progress.completedLessons.push(lessonId);
-        
-        // Recalculate overall progress
-        const course = mockCourses.find(c => c.id === courseId);
-        if (course) {
-          const totalLessons = course.modules.reduce((total, module) => total + module.lessons.length, 0);
-          progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
-        }
-      }
-
+      const response = await api.post(`/courses/${courseId}/progress/complete-lesson`, { lessonId });
+      const data = response.data;
       return {
-        success: true
+        success: data.success !== false,
+        message: data.message
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
-        message: 'Failed to complete lesson'
+        message: error.response?.data?.message || 'Failed to complete lesson'
+      };
+    }
+  }
+
+  // Upload certificate PDF (after generating client-side) and get certificate URL
+  async uploadCertificate(courseId: string, file: Blob): Promise<{ success: boolean; certificateUrl?: string; message?: string }> {
+    try {
+      const formData = new FormData();
+      formData.append('certificate', file, 'certificate.pdf');
+      const response = await api.post(`/courses/${courseId}/certificate/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        certificateUrl: data.data?.certificateUrl,
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        certificateUrl: undefined,
+        message: error.response?.data?.message || 'Failed to upload certificate'
+      };
+    }
+  }
+
+  // Upload certificate template PDF for a course (creator; stored in S3/local). Used when issuing learner certificates.
+  async uploadCertificateTemplate(courseId: string, file: File): Promise<{ success: boolean; certificateTemplatePdfUrl?: string; message?: string }> {
+    try {
+      const formData = new FormData();
+      formData.append('template', file, file.name || 'certificate-template.pdf');
+      const response = await api.post(`/courses/${courseId}/certificate/template`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const data = response.data;
+      return {
+        success: data.success !== false,
+        certificateTemplatePdfUrl: data.data?.certificateTemplatePdfUrl,
+        message: data.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        certificateTemplatePdfUrl: undefined,
+        message: error.response?.data?.message || 'Failed to upload certificate template'
       };
     }
   }

@@ -1,17 +1,7 @@
-import { Box, Typography, Container, Card, CardContent, Avatar, styled, keyframes } from '@mui/material';
+import { Box, Typography, Container, CardContent, Avatar, styled } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { FormatQuote, Star, PlayCircle } from '@mui/icons-material';
-
-const float = keyframes`
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-15px) rotate(5deg); }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -1000px 0; }
-  100% { background-position: 1000px 0; }
-`;
 
 const SectionContainer = styled(Container)`
   padding: 8rem 2rem;

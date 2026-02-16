@@ -11,15 +11,9 @@ import {
   Divider,
 } from '@mui/material';
 import {
-  Dashboard,
-  People,
-  Business,
-  MenuBook,
   Security,
   Brightness4,
   Brightness7,
-  Store as StoreIcon,
-  ManageAccounts,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DRAWER_WIDTH } from '../../constants/layout';
@@ -76,14 +70,14 @@ export interface MenuItem {
 
 interface SidebarProps {
   onThemeToggle: () => void;
-  onMenuSelect: (menu: MenuItem) => void;
+  onMenuSelect: (_menu: MenuItem) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onThemeToggle, onMenuSelect }) => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, hasPermission } = useAuth();
+  const { hasPermission } = useAuth();
 
   const menuItems: MenuItem[] = menuHierarchy
     .filter(item => hasPermission(item.resource, 'View'))
@@ -142,9 +136,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onThemeToggle, onMenuSelect }) => {
   const isSelected = (item: MenuItem) => {
     return location.pathname.startsWith(item.path);
   };
-
-  
-  console.log('Checking for User List View:', hasPermission('User List', 'View'));
 
   return (
     <StyledDrawer variant="permanent">

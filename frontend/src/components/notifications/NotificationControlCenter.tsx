@@ -56,7 +56,6 @@ import {
   Save as SaveIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
   Download as DownloadIcon,
   Visibility as ViewIcon,
   CheckCircle as CheckCircleIcon,
@@ -71,10 +70,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   AccessTime as AccessTimeIcon,
   Security as SecurityIcon,
-  Group as GroupIcon,
   Block as BlockIcon,
-  Check as CheckIcon,
-  Close as CloseIcon,
 } from '@mui/icons-material';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import axios from 'axios';
@@ -204,7 +200,7 @@ const channelIcons = {
   whatsapp: <WhatsAppIcon style={{ color: '#25D366' }} />,
 };
 
-const channelColors = {
+const _channelColors = {
   email: '#1976d2',
   sms: '#2e7d32',
   push: '#ed6c02',
@@ -219,9 +215,9 @@ const NotificationControlCenter: React.FC = () => {
   const [notificationTypes, setNotificationTypes] = useState<NotificationType[]>([]);
   const [notificationTypesLoading, setNotificationTypesLoading] = useState(false);
 
-  const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([]);
+  const [notificationLogs] = useState<NotificationLog[]>([]);
 
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [_logsLoading, _setLogsLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingNotification, setEditingNotification] = useState<NotificationType | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -353,9 +349,8 @@ const NotificationControlCenter: React.FC = () => {
         }
         return notification;
       }));
-    } catch (error) {
-      console.error('Error toggling notification type status:', error);
-      // You might want to show an error message to the user here
+    } catch {
+      // Toggle failed
     } finally {
       setNotificationTypesLoading(false);
     }
@@ -427,8 +422,8 @@ const NotificationControlCenter: React.FC = () => {
         }
         setOpenDialog(false);
         setEditingNotification(null);
-      } catch (error) {
-        console.error('Error saving notification type:', error);
+      } catch {
+        // Save failed
       } finally {
         setNotificationTypesLoading(false);
       }
@@ -440,8 +435,8 @@ const NotificationControlCenter: React.FC = () => {
       setNotificationTypesLoading(true);
       await notificationTypeService.delete(notificationId);
       setNotificationTypes(prev => prev.filter(n => n.id !== notificationId));
-    } catch (error) {
-      console.error('Error deleting notification type:', error);
+    } catch {
+      // Delete failed
       // You might want to show an error message to the user here
     } finally {
       setNotificationTypesLoading(false);
@@ -581,8 +576,8 @@ const NotificationControlCenter: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setChatSettingsSaved(true);
       setTimeout(() => setChatSettingsSaved(false), 3000);
-    } catch (error) {
-      console.error('Error saving chat settings:', error);
+    } catch {
+      // Save failed
     } finally {
       setSavingChatSettings(false);
     }
@@ -621,8 +616,8 @@ const NotificationControlCenter: React.FC = () => {
           schedule: nt.schedule,
           eventType: nt.eventType
         })));
-      } catch (error) {
-        console.error('Error fetching data:', error);
+      } catch {
+        // Fetch failed
       } finally {
         setNotificationTypesLoading(false);
       }
@@ -1068,7 +1063,7 @@ const NotificationControlCenter: React.FC = () => {
                   const selectedType = notificationTypes.find(nt => nt.eventType === emitEventType);
                   if (!selectedType) return <Typography color="text.secondary">No roles/channels found for this event.</Typography>;
                   const roleNames = roles.filter(r => selectedType.roles.includes(r._id)).map(r => r.name).join(', ') || 'No roles selected';
-                  const enabledChannels = Object.entries(selectedType.channels).filter(([k, v]) => v).map(([k]) => k).join(', ') || 'No channels enabled';
+                  const enabledChannels = Object.entries(selectedType.channels).filter(([_k, v]) => v).map(([k]) => k).join(', ') || 'No channels enabled';
                   return <Typography color="text.secondary">{roleNames} ({enabledChannels})</Typography>;
                 })()}
               </Box>

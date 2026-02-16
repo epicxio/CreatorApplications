@@ -5,6 +5,7 @@ const UserType = require('../models/UserType');
 const Role = require('../models/Role');
 const mongoose = require('mongoose');
 const CreatorCategory = require('../models/CreatorCategory');
+const { triggerNotification } = require('../services/notificationService');
 
 // Get all users with optional filtering
 const getUsers = async (req, res) => {
@@ -32,14 +33,15 @@ const getUsers = async (req, res) => {
       ];
     }
     
-    // Always populate userType and role (with name)
+    // Always populate userType, role, suspendedBy, reactivatedBy for display.
     const users = await User.find(query)
       .populate('userType', 'name icon color')
-      .populate('role', 'name');
-    // For each user, ensure assignedScreens is from DB if present
+      .populate('role', 'name')
+      .populate('suspendedBy', 'name email')
+      .populate('reactivatedBy', 'name email')
+      .lean();
     const usersWithScreens = users.map(user => {
-      const userObj = user.toObject();
-      // Compute assignedScreens dynamically from permissions
+      const userObj = { ...user };
       userObj.assignedScreens = [];
       if (user.role && user.role.permissions && user.role.permissions.length > 0) {
         userObj.assignedScreens = user.role.permissions
@@ -337,42 +339,69 @@ const checkPhoneNumber = async (req, res) => {
 // Creator signup (status: pending)
 const signupCreator = async (req, res) => {
   try {
-    const { name, email, username, phoneNumber, password, bio, socialMedia } = req.body;
-    if (!username || !phoneNumber || !password) {
-      return res.status(400).json({ message: 'Username, phone number, and password are required.' });
+    const { name, email, username, phoneNumber, password, bio, instagram, facebook, youtube } = req.body;
+    if (!name || !email || !username || !phoneNumber || !password) {
+      return res.status(400).json({ message: 'Name, email, username, phone number, and password are required.' });
     }
-    const existingEmail = await User.findOne({ email });
+    const existingEmail = await User.findOne({ email: (email || '').trim().toLowerCase() });
     if (existingEmail) {
       return res.status(400).json({ message: 'User with this email already exists.' });
     }
-    const existingUsername = await User.findOne({ username });
+    const existingUsername = await User.findOne({ username: (username || '').trim() });
     if (existingUsername) {
       return res.status(400).json({ message: 'Username is already taken.' });
     }
-    const existingPhone = await User.findOne({ phoneNumber });
+    const existingPhone = await User.findOne({ phoneNumber: (phoneNumber || '').trim() });
     if (existingPhone) {
       return res.status(400).json({ message: 'Phone number is already registered.' });
     }
-    // Find creator userType
     const creatorType = await UserType.findOne({ name: 'creator' });
-    if (!creatorType) return res.status(400).json({ message: 'Creator user type not found.' });
+    if (!creatorType) {
+      return res.status(400).json({ message: 'Creator user type not found. Please contact support.' });
+    }
+    const creatorRole = await Role.findOne({ name: 'Creator' });
+    if (!creatorRole) {
+      return res.status(400).json({ message: 'Creator role not found. Please contact support.' });
+    }
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
+    const socialMedia = {
+      instagram: (instagram || '').trim() || undefined,
+      facebook: (facebook || '').trim() || undefined,
+      youtube: (youtube || '').trim() || undefined
+    };
     const newUser = new User({
-      name,
-      email,
-      username,
-      phoneNumber,
+      name: (name || '').trim(),
+      email: (email || '').trim().toLowerCase(),
+      username: (username || '').trim(),
+      phoneNumber: (phoneNumber || '').trim(),
       passwordHash,
       userType: creatorType._id,
+      role: creatorRole._id,
       status: 'pending',
-      bio,
+      bio: (bio || '').trim() || undefined,
       socialMedia
     });
     await newUser.save();
+    try {
+      await triggerNotification('creator_signup', {
+        userName: (name || '').trim(),
+        userEmail: (email || '').trim().toLowerCase(),
+        creatorName: (name || '').trim(),
+        creatorEmail: (email || '').trim().toLowerCase(),
+        username: (username || '').trim(),
+        phoneNumber: (phoneNumber || '').trim()
+      });
+    } catch (notifErr) {
+      console.warn('Creator signup: could not send notification', notifErr.message);
+    }
     res.status(201).json({ message: 'Request sent to Creator Admin.' });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Creator signup error:', err);
+    const message = err.name === 'ValidationError'
+      ? (err.errors && Object.values(err.errors)[0] && Object.values(err.errors)[0].message) || err.message
+      : 'Something went wrong. Please try again.';
+    res.status(500).json({ message: message || 'Server error' });
   }
 };
 
@@ -407,6 +436,67 @@ const rejectCreator = async (req, res) => {
     const user = await User.findByIdAndUpdate(id, { status: 'rejected' }, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'Creator rejected', user });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Suspend user (with reason). Cannot suspend Super Admin.
+const suspendUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      return res.status(400).json({ message: 'Suspension reason is required.' });
+    }
+    const user = await User.findById(id).populate('role', 'name');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const roleName = user.role && typeof user.role === 'object' ? user.role.name : '';
+    if (roleName === 'Super Admin') {
+      return res.status(403).json({ message: 'Super Admin cannot be suspended.' });
+    }
+    const suspendedBy = req.user && req.user.id ? req.user.id : null;
+    const updated = await User.findByIdAndUpdate(
+      id,
+      {
+        status: 'suspended',
+        suspendedAt: new Date(),
+        suspendedReason: reason.trim(),
+        suspendedBy
+      },
+      { new: true }
+    ).populate('userType', 'name').populate('role', 'name');
+    res.json({ message: 'User suspended.', user: updated });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// Unsuspend (reactivate) user. Requires reason. Stores reactivatedAt/reactivatedReason/reactivatedBy.
+const unsuspendUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reason = req.body && typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) {
+      return res.status(400).json({ message: 'Reactivation reason is required.' });
+    }
+    const reactivatedBy = req.user && req.user.id ? req.user.id : null;
+    const user = await User.findByIdAndUpdate(
+      id,
+      {
+        status: 'active',
+        reactivatedAt: new Date(),
+        reactivatedReason: reason,
+        reactivatedBy,
+      },
+      { new: true }
+    )
+      .populate('userType', 'name')
+      .populate('role', 'name')
+      .populate('suspendedBy', 'name email')
+      .populate('reactivatedBy', 'name email');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: 'User reactivated.', user });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -475,6 +565,8 @@ module.exports = {
   getPendingCreators,
   approveCreator,
   rejectCreator,
+  suspendUser,
+  unsuspendUser,
   getCreatorCategories,
   updateCreatorCategories,
 }; 

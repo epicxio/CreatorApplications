@@ -23,6 +23,14 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        message: 'User Suspended. Kindly Contact Admin.',
+        suspended: true,
+        suspendedReason: user.suspendedReason || null
+      });
+    }
+
     // Update lastLogin timestamp
     user.lastLogin = new Date();
     await user.save();
@@ -52,9 +60,68 @@ exports.login = async (req, res) => {
       payload,
       process.env.JWT_SECRET,
       { expiresIn: '5h' },
-      (err, token) => {
+      async (err, token) => {
         if (err) throw err;
-        res.json({ token });
+        
+        // Get full user data with populated fields for complete user object
+        const fullUser = await User.findById(user._id)
+          .select('-passwordHash')
+          .populate('userType', 'name')
+          .populate({
+            path: 'role',
+            populate: { path: 'permissions' }
+          })
+          .lean();
+        
+        // Compute assignedScreens dynamically from permissions
+        let assignedScreens = [];
+        if (fullUser.role && fullUser.role.permissions && fullUser.role.permissions.length > 0) {
+          assignedScreens = fullUser.role.permissions
+            .filter(p => p.action === 'View')
+            .map(p => p.resource);
+          assignedScreens = Array.from(new Set(assignedScreens));
+        }
+        fullUser.assignedScreens = assignedScreens;
+        fullUser.categories = fullUser.categories || [];
+        
+        // Fire-and-forget: create KYC reminder notification for creators with incomplete KYC
+        if (fullUser.userType && fullUser.userType.name === 'creator') {
+          setImmediate(async () => {
+            try {
+              const kycService = require('../services/kycService');
+              const Notification = require('../models/Notification');
+              const kycData = await kycService.getKYCProfile(user._id);
+              if (kycData.percentUploaded < 100) {
+                const recentCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                const existing = await Notification.findOne({
+                  user: user._id,
+                  eventType: 'creator_kyc_reminder',
+                  read: false,
+                  createdAt: { $gte: recentCutoff }
+                });
+                if (!existing) {
+                  await Notification.create({
+                    user: user._id,
+                    title: 'KYC Required',
+                    message: 'Please upload your KYC documents to proceed.',
+                    eventType: 'creator_kyc_reminder',
+                    read: false,
+                    delivered: false,
+                    channels: ['inApp']
+                  });
+                }
+              }
+            } catch (e) {
+              console.warn('KYC reminder notification:', e.message);
+            }
+          });
+        }
+        
+        // Return token along with complete user data to avoid extra API call
+        res.json({ 
+          token,
+          user: fullUser
+        });
       }
     );
   } catch (err) {

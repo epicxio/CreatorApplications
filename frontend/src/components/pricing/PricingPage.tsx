@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Container, Grid, Chip, AppBar, Toolbar, styled, keyframes } from '@mui/material';
+import { Box, Typography, Container, Grid, Chip, AppBar, Toolbar, styled } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,16 +11,6 @@ import {
   Diamond, 
   EmojiEvents,
 } from '@mui/icons-material';
-
-const pulse = keyframes`
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-`;
-
-const glow = keyframes`
-  0%, 100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
-  50% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }
-`;
 
 const Navbar = styled(motion(AppBar))`
   background: rgba(255, 255, 255, 0.95);

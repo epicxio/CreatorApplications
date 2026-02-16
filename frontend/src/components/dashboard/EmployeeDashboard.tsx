@@ -2,34 +2,20 @@ import React, { useState } from 'react';
 import {
   Box,
   Grid,
-  Paper,
   Typography,
   Card,
   CardContent,
   LinearProgress,
-  Chip,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  IconButton,
   Tab,
   Tabs,
-  Badge,
-  Tooltip,
 } from '@mui/material';
 import {
-  PlayCircleOutline,
   CalendarToday,
   Timeline,
   EmojiEvents,
   School,
   Assessment,
-  CheckCircle,
-  Star,
-  TrendingUp,
-  AccessTime,
   WorkspacePremium,
   Speed,
   Grade,
@@ -43,8 +29,6 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import {
-  BarChart as RechartsBarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -53,9 +37,9 @@ import {
   LineChart,
   Line,
 } from 'recharts';
-import { LinearProgressProps } from '@mui/material/LinearProgress';
 
 // Styled Components
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StyledCard = styled(Card)(({ theme }) => ({
   background: '#FFFFFF',
   borderRadius: '20px',
@@ -99,6 +83,7 @@ const StyledLinearProgress = styled(LinearProgress)(({ theme }) => ({
   },
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const CourseIcon = styled(Box)(({ theme }) => ({
   marginBottom: '16px',
   '& .MuiSvgIcon-root': {

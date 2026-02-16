@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -20,9 +20,18 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Paper,
   IconButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -34,7 +43,14 @@ import {
   CheckCircle as CheckIcon,
   Share as ShareIcon,
   Bookmark as BookmarkIcon,
-  BookmarkBorder as BookmarkBorderIcon
+  BookmarkBorder as BookmarkBorderIcon,
+  CardMembership as CertificateIcon,
+  Download as DownloadIcon,
+  ExpandMore as ExpandMoreIcon,
+  QuestionAnswer as QuestionAnswerIcon,
+  ContentCopy as ContentCopyIcon,
+  MonetizationOn as MonetizationOnIcon,
+  WaterDrop as WaterDropIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { Course } from '../types/course';
@@ -42,10 +58,14 @@ import { courseService } from '../services/courseService';
 import { progressService } from '../services/progressService';
 import { useAuth } from '../context/AuthContext';
 import CurriculumAccordion from '../components/learning/CurriculumAccordion';
+import { generateCertificateBlob, fillCertificateTemplateFromUrl } from '../utils/pdfCertificateGenerator';
+
+const STORAGE_KEY_AFFILIATE_REF = 'course_affiliate_ref';
 
 const CourseDetailPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
   const [course, setCourse] = useState<Course | null>(null);
@@ -54,7 +74,46 @@ const CourseDetailPage: React.FC = () => {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [progress, setProgress] = useState(0);
   const [completedLessons, setCompletedLessons] = useState<string[]>([]);
+  const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
+  const [certificateIssuedAt, setCertificateIssuedAt] = useState<string | null>(null);
+  const [certificateEarnedAt, setCertificateEarnedAt] = useState<string | null>(null);
+  const [certificateLoading, setCertificateLoading] = useState(false);
+  const [certificateError, setCertificateError] = useState<string | null>(null);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutCurrency] = useState('INR');
+  /** Affiliate ref from ?ref=CODE; persisted per course for checkout */
+  const [affiliateRefCode, setAffiliateRefCode] = useState<string | null>(null);
+  /** Affiliate link for current user (when they click "Get my affiliate link") */
+  const [affiliateLink, setAffiliateLink] = useState<string | null>(null);
+  const [affiliateLinkLoading, setAffiliateLinkLoading] = useState(false);
+
+  // Capture ?ref= from URL and persist for checkout (affiliate attribution)
+  useEffect(() => {
+    const refFromUrl = searchParams.get('ref');
+    if (refFromUrl && refFromUrl.trim()) {
+      const code = refFromUrl.trim();
+      setAffiliateRefCode(code);
+      if (courseId) {
+        try {
+          const key = `${STORAGE_KEY_AFFILIATE_REF}_${courseId}`;
+          sessionStorage.setItem(key, code);
+        } catch {
+          // ignore
+        }
+      }
+    } else if (courseId) {
+      try {
+        const key = `${STORAGE_KEY_AFFILIATE_REF}_${courseId}`;
+        const stored = sessionStorage.getItem(key);
+        if (stored) setAffiliateRefCode(stored);
+      } catch {
+        // ignore
+      }
+    }
+  }, [courseId, searchParams]);
 
   // Load course details
   const loadCourse = async () => {
@@ -73,7 +132,6 @@ const CourseDetailPage: React.FC = () => {
       }
     } catch (err) {
       setError('An error occurred while loading the course');
-      console.error('Error loading course:', err);
     } finally {
       setLoading(false);
     }
@@ -90,38 +148,85 @@ const CourseDetailPage: React.FC = () => {
         setIsEnrolled(true);
         setProgress(response.data.overallProgress);
         setCompletedLessons(response.data.completedLessons);
+        setCertificateUrl(response.data.certificateUrl ?? null);
+        setCertificateIssuedAt(response.data.certificateIssuedAt ?? null);
+        setCertificateEarnedAt(response.data.certificateEarnedAt ?? null);
+        progressService.syncProgressFromApi(courseId, user._id, {
+          overallProgress: response.data.overallProgress,
+          completedLessons: response.data.completedLessons,
+          lastAccessed: response.data.lastAccessed,
+          enrolledAt: response.data.enrolledAt
+        });
       } else {
         setIsEnrolled(false);
         setProgress(0);
         setCompletedLessons([]);
+        setCertificateUrl(null);
+        setCertificateIssuedAt(null);
+        setCertificateEarnedAt(null);
       }
-    } catch (error) {
-      console.error('Error loading user progress:', error);
+    } catch {
+      // Progress load failed
     }
   };
 
-  // Handle enrollment
+  // Handle enrollment (free: direct enroll; paid: open checkout)
   const handleEnroll = async () => {
-    if (!courseId || !user?._id) return;
+    if (!courseId || !user?._id || !course) return;
+
+    if (isPaidCourse) {
+      setSelectedPaymentMethod(enabledPaymentMethodsList[0] || 'Credit/Debit Cards');
+      setCheckoutOpen(true);
+      return;
+    }
 
     try {
       const response = await courseService.enrollCourse(courseId, user._id);
-      
       if (response.success) {
         setIsEnrolled(true);
         setProgress(0);
         setCompletedLessons([]);
-        
-        // Initialize progress in local storage
-        if (course) {
-          progressService.initializeProgress(courseId, user._id);
-        }
+        setCertificateUrl(null);
+        setCertificateIssuedAt(null);
+        setCertificateEarnedAt(null);
+        progressService.initializeProgress(courseId, user._id);
       } else {
         setError(response.message || 'Failed to enroll in course');
       }
-    } catch (error) {
+    } catch {
       setError('An error occurred while enrolling');
-      console.error('Error enrolling:', error);
+    }
+  };
+
+  const handlePay = async () => {
+    if (!courseId || !selectedPaymentMethod) return;
+    setCheckoutLoading(true);
+    setError(null);
+    try {
+      const response = await courseService.placeOrder(courseId, selectedPaymentMethod, checkoutCurrency, affiliateRefCode ?? undefined);
+      if (response.success) {
+        setCheckoutOpen(false);
+        setIsEnrolled(true);
+        setProgress(0);
+        setCompletedLessons([]);
+        setCertificateUrl(null);
+        setCertificateIssuedAt(null);
+        setCertificateEarnedAt(null);
+        setAffiliateRefCode(null);
+        try {
+          sessionStorage.removeItem(`${STORAGE_KEY_AFFILIATE_REF}_${courseId}`);
+        } catch {
+          // ignore
+        }
+        if (course) progressService.initializeProgress(courseId, user!._id);
+        loadUserProgress();
+      } else {
+        setError(response.message || 'Payment failed');
+      }
+    } catch {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -160,14 +265,68 @@ const CourseDetailPage: React.FC = () => {
           text: course?.description,
           url: window.location.href
         });
-      } catch (error) {
-        console.log('Error sharing:', error);
+      } catch {
+        // Share failed
       }
     } else {
       // Fallback: copy to clipboard
       navigator.clipboard.writeText(window.location.href);
       // TODO: Show toast notification
     }
+  };
+
+  // Certificate: get or download
+  const handleGetCertificate = async () => {
+    if (!courseId || !course || !user?._id) return;
+    setCertificateLoading(true);
+    setCertificateError(null);
+    try {
+      const threshold = course.certificateCompletionPercentage ?? 100;
+      let earnedAt = certificateEarnedAt;
+      if (!earnedAt && progress >= threshold) {
+        const progressRes = await courseService.getProgress(courseId, user._id);
+        if (progressRes.success && progressRes.data.certificateEarnedAt) {
+          earnedAt = progressRes.data.certificateEarnedAt;
+        }
+      }
+      const templateId = course.certificateTemplate || '1';
+      const completionDateStr = earnedAt
+        ? new Date(earnedAt).toISOString().split('T')[0]
+        : (certificateIssuedAt ? new Date(certificateIssuedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+      const certificateData = {
+        studentName: user.name || 'Learner',
+        courseName: course.name,
+        completionDate: completionDateStr,
+        certificateNumber: `CERT-${course.id}-${user._id}-${Date.now()}`,
+        instructorName: course.instructor?.name,
+        certificateDescription: course.certificateDescription || 'This is to certify that',
+        signBelowText: 'has successfully completed the course',
+        instructorSignature: course.certificateSignatures?.[0]?.image,
+        deanSignature: course.certificateSignatures?.[1]?.image,
+        applicationLogo: course.certificateApplicationLogo,
+        creatorLogo: course.certificateCreatorLogo
+      };
+      const blob = course.certificateTemplatePdfUrl
+        ? await fillCertificateTemplateFromUrl(course.certificateTemplatePdfUrl, certificateData)
+        : generateCertificateBlob(templateId, certificateData);
+      const result = await courseService.uploadCertificate(courseId, blob);
+      if (result.success && result.certificateUrl) {
+        setCertificateUrl(result.certificateUrl);
+        setCertificateIssuedAt(new Date().toISOString());
+        window.open(result.certificateUrl, '_blank');
+        loadUserProgress();
+      } else {
+        setCertificateError(result.message || 'Failed to issue certificate. Please try again.');
+      }
+    } catch {
+      setCertificateError('Failed to generate or upload certificate. Please try again.');
+    } finally {
+      setCertificateLoading(false);
+    }
+  };
+
+  const handleDownloadCertificate = () => {
+    if (certificateUrl) window.open(certificateUrl, '_blank');
   };
 
   // Format duration
@@ -184,10 +343,38 @@ const CourseDetailPage: React.FC = () => {
     return `₹${amount}`;
   };
 
+  const isPaidCourse = useMemo(() => {
+    if (!course) return false;
+    const sp = course.sellingPrice || {};
+    return (sp.INR ?? 0) > 0 || (sp.USD ?? 0) > 0 || (sp.EUR ?? 0) > 0 || (sp.GBP ?? 0) > 0;
+  }, [course]);
+
+  // Enabled payment methods for learner (creator-configured) for a given currency
+  const enabledPaymentMethodsList = useMemo(() => {
+    if (!course?.paymentMethods || typeof course.paymentMethods !== 'object') {
+      return ['Credit/Debit Cards', 'UPI', 'Buy Now Pay Later'];
+    }
+    const pm = course.paymentMethods as Record<string, { [key: string]: boolean }>;
+    const universal = (pm.universal && typeof pm.universal === 'object' ? pm.universal : {}) as { [key: string]: boolean };
+    const perCurrency = (pm[checkoutCurrency] || pm.INR || pm.USD || {}) as { [key: string]: boolean };
+    const set = new Set<string>();
+    Object.entries(universal).forEach(([k, v]) => { if (v) set.add(k); });
+    Object.entries(perCurrency).forEach(([k, v]) => { if (v) set.add(k); });
+    const list = Array.from(set);
+    return list.length > 0 ? list : ['Credit/Debit Cards', 'UPI', 'Buy Now Pay Later'];
+  }, [course, checkoutCurrency]);
+
+  useEffect(() => {
+    if (checkoutOpen && enabledPaymentMethodsList.length > 0 && !selectedPaymentMethod) {
+      setSelectedPaymentMethod(enabledPaymentMethodsList[0]);
+    }
+  }, [checkoutOpen, enabledPaymentMethodsList, selectedPaymentMethod]);
+
   // Load data on component mount
   useEffect(() => {
     loadCourse();
     loadUserProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, user?._id]);
 
   if (loading) {
@@ -388,7 +575,7 @@ const CourseDetailPage: React.FC = () => {
                         }
                       }}
                     >
-                      Enroll Now - {formatPrice(course.sellingPrice)}
+                      {isPaidCourse ? `Buy Now - ${formatPrice(course.sellingPrice)}` : `Enroll Now - Free`}
                     </Button>
                   )}
                 </Box>
@@ -413,6 +600,32 @@ const CourseDetailPage: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
+
+            {/* FAQs (creator-defined, shown to learners) */}
+            {course.faqs && course.faqs.length > 0 && (
+              <Card sx={{ mb: 4 }}>
+                <CardContent>
+                  <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <QuestionAnswerIcon color="primary" />
+                    Frequently Asked Questions
+                  </Typography>
+                  {course.faqs.map((faq, index) => (
+                    <Accordion key={index} disableGutters sx={{ boxShadow: 'none', '&:before': { display: 'none' }, borderBottom: index < course.faqs!.length - 1 ? '1px solid' : 'none', borderColor: 'divider' }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {faq.question}
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                          {faq.answer}
+                        </Typography>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Instructor */}
             <Card sx={{ mb: 4 }}>
@@ -500,9 +713,64 @@ const CourseDetailPage: React.FC = () => {
                       secondary={course.certificateEnabled ? 'Included' : 'Not available'}
                     />
                   </ListItem>
+                  <ListItem>
+                    <ListItemIcon>
+                      <WaterDropIcon color="primary" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Watermark"
+                      secondary={course.watermarkRemovalEnabled ? 'Removed (clean content)' : 'On videos & documents'}
+                    />
+                  </ListItem>
                 </List>
 
                 <Divider sx={{ my: 2 }} />
+
+                {/* Earn as affiliate (when program is on and user is logged in) */}
+                {user && course.affiliateActive && (
+                  <>
+                    <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <MonetizationOnIcon fontSize="small" color="primary" />
+                        Earn as affiliate
+                      </Typography>
+                      {affiliateLink ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">Your link:</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <Typography variant="body2" sx={{ wordBreak: 'break-all', flex: 1 }}>{affiliateLink}</Typography>
+                            <IconButton size="small" onClick={() => { navigator.clipboard.writeText(affiliateLink); }} title="Copy"><ContentCopyIcon fontSize="small" /></IconButton>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          fullWidth
+                          disabled={affiliateLinkLoading}
+                          onClick={async () => {
+                            if (!courseId) return;
+                            setAffiliateLinkLoading(true);
+                            try {
+                              const res = await courseService.createAffiliateCode(courseId);
+                              if (res.success && res.data?.link) setAffiliateLink(res.data.link);
+                            } finally {
+                              setAffiliateLinkLoading(false);
+                            }
+                          }}
+                        >
+                          {affiliateLinkLoading ? 'Getting link...' : 'Get my affiliate link'}
+                        </Button>
+                      )}
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        <Link component="button" variant="caption" onClick={() => navigate('/affiliate')} sx={{ cursor: 'pointer' }}>
+                          View all my affiliate links
+                        </Link>
+                      </Typography>
+                    </Box>
+                    <Divider sx={{ my: 2 }} />
+                  </>
+                )}
 
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
@@ -543,11 +811,100 @@ const CourseDetailPage: React.FC = () => {
                     </Box>
                   </>
                 )}
+
+                {isEnrolled && course.certificateEnabled && progress >= (course.certificateCompletionPercentage ?? 100) && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <CertificateIcon fontSize="small" color="primary" />
+                        Certificate
+                      </Typography>
+                      {certificateError && (
+                        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setCertificateError(null)}>
+                          {certificateError}
+                        </Alert>
+                      )}
+                      {certificateUrl ? (
+                        <Box>
+                          {certificateIssuedAt && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                              Issued on {new Date(certificateIssuedAt).toLocaleDateString()}
+                            </Typography>
+                          )}
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            size="small"
+                            startIcon={<DownloadIcon />}
+                            onClick={handleDownloadCertificate}
+                            data-testid="download-certificate"
+                          >
+                            Download certificate
+                          </Button>
+                        </Box>
+                      ) : (
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          size="small"
+                          startIcon={<CertificateIcon />}
+                          onClick={handleGetCertificate}
+                          disabled={certificateLoading}
+                          data-testid="get-certificate"
+                        >
+                          {certificateLoading ? 'Issuing...' : 'Get your certificate'}
+                        </Button>
+                      )}
+                    </Box>
+                  </>
+                )}
               </CardContent>
             </Card>
           </Grid>
         </Grid>
       </Container>
+
+      {/* Checkout modal (paid courses): show creator-configured payment methods, Pay records order and enrolls */}
+      <Dialog open={checkoutOpen} onClose={() => !checkoutLoading && setCheckoutOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Complete payment</DialogTitle>
+        <DialogContent>
+          {course && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                {course.name}
+              </Typography>
+              <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                {formatPrice(course.sellingPrice)}
+              </Typography>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                Select payment method
+              </Typography>
+              <RadioGroup
+                value={selectedPaymentMethod}
+                onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+              >
+                {enabledPaymentMethodsList.map((method) => (
+                  <FormControlLabel
+                    key={method}
+                    value={method}
+                    control={<Radio />}
+                    label={method}
+                  />
+                ))}
+              </RadioGroup>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCheckoutOpen(false)} disabled={checkoutLoading}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handlePay} disabled={checkoutLoading || !selectedPaymentMethod}>
+            {checkoutLoading ? 'Processing...' : 'Pay'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

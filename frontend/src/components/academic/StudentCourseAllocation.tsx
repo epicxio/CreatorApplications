@@ -23,7 +23,6 @@ import {
   Tab,
   styled,
   Avatar,
-  Tooltip,
   CircularProgress,
 } from '@mui/material';
 import {
@@ -32,9 +31,7 @@ import {
   Person as PersonIcon,
   Check as CheckIcon,
   Close as CloseIcon,
-  Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
 } from '@mui/icons-material';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({

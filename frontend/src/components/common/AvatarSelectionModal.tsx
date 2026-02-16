@@ -15,13 +15,14 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 
-const importAll = (r: { keys: () => string[]; (key: string): string }): string[] => r.keys().map(r);
+const importAll = (r: { keys: () => string[]; (_key: string): string }): string[] => r.keys().map(r);
 
 const beautifulAvatars = importAll(require.context('../../assets/images/avatars/beautiful', false, /\.(svg)$/));
 const animalAvatars = importAll(require.context('../../assets/images/avatars/animals', false, /\.(svg)$/));
 const cartoonAvatars = importAll(require.context('../../assets/images/avatars/cartoons', false, /\.(svg)$/));
 const genZCartoonsAvatars = importAll(require.context('../../assets/images/avatars/genz', false, /\.(svg)$/));
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StyledDialog = styled(Dialog)(({ theme }) => ({
   '& .MuiDialog-paper': {
     backgroundColor: 'rgba(30, 30, 30, 0.8)',
@@ -46,7 +47,7 @@ const AvatarContainer = styled(Box)`
 interface AvatarSelectionModalProps {
   open: boolean;
   onClose: () => void;
-  onSelectAvatar: (url: string) => void;
+  onSelectAvatar: (_url: string) => void;
   initialTab?: number;
 }
 

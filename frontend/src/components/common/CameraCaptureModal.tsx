@@ -38,7 +38,7 @@ const CaptureButton = styled(Button)({
 interface CameraCaptureModalProps {
   open: boolean;
   onClose: () => void;
-  onCapture: (imageSrc: string) => void;
+  onCapture: (_imageSrc: string) => void;
 }
 
 export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ open, onClose, onCapture }) => {
@@ -54,8 +54,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ open, on
             videoRef.current.srcObject = stream;
           }
         })
-        .catch(err => {
-          console.error("Error accessing camera: ", err);
+        .catch(() => {
           alert('Could not access the camera. Please check your browser permissions.');
           onClose();
         });
@@ -71,6 +70,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ open, on
         stream.getTracks().forEach(track => track.stop());
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose/stream intentionally excluded
   }, [open]);
 
   const handleCapture = () => {

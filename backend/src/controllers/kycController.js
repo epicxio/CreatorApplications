@@ -1,6 +1,9 @@
 const kycService = require('../services/kycService');
 const fileStorage = require('../utils/fileStorage');
+const s3Service = require('../services/s3Service');
 const { triggerNotification } = require('../services/notificationService');
+const path = require('path');
+const axios = require('axios');
 
 class KYCController {
   // Get user's KYC profile and documents
@@ -387,12 +390,11 @@ class KYCController {
     }
   }
 
-  // Download document file
+  // Download document file (stream from local or redirect to S3 presigned URL)
   async downloadDocument(req, res) {
     try {
       const { documentId } = req.params;
       const userId = req.user.id;
-      // Check for RBAC permissions
       const canViewAnyKYC = req.user?.permissions?.some(p =>
         [
           'Creator',
@@ -401,12 +403,36 @@ class KYCController {
           'Brand Management'
         ].includes(p.resource) && (p.action === 'View' || p.action === 'All')
       );
-      const { filePath, fileName, mimeType } = await kycService.getDocumentForDownload(documentId, userId, canViewAnyKYC);
+      const { filePath, fileName, mimeType, s3Key } = await kycService.getDocumentForDownload(documentId, userId, canViewAnyKYC);
+
+      if (s3Key) {
+        const presignedUrl = await s3Service.getPresignedUrl(s3Key);
+        // Proxy the file from S3 to avoid CORS when frontend fetches from a different origin
+        const streamResponse = await axios({
+          method: 'GET',
+          url: presignedUrl,
+          responseType: 'stream',
+          validateStatus: () => true,
+        });
+        if (streamResponse.status !== 200) {
+          return res.status(404).json({ success: false, message: 'File not found' });
+        }
+        const contentType = streamResponse.headers['content-type'] || mimeType || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+        streamResponse.data.pipe(res);
+        return;
+      }
 
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Content-Disposition', `inline; filename=\"${fileName}\"`);
       const fs = require('fs');
-      const fileStream = fs.createReadStream(filePath);
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(__dirname, '..', '..', filePath);
+      const fileStream = fs.createReadStream(absolutePath);
+      fileStream.on('error', (err) => {
+        console.error('KYC download stream error:', err);
+        if (!res.headersSent) res.status(404).json({ success: false, message: 'File not found' });
+      });
       fileStream.pipe(res);
     } catch (error) {
       res.status(404).json({ success: false, message: error.message });

@@ -23,12 +23,12 @@ interface ChatContextType {
   otherUser: ChatUser | null;
   chatSettings: ChatSettings;
   isChatEnabled: boolean;
-  setCurrentUser: (user: ChatUser) => void;
-  setOtherUser: (user: ChatUser) => void;
-  setChatSettings: (settings: ChatSettings) => void;
-  setIsChatEnabled: (enabled: boolean) => void;
-  handleSendMessage: (message: string, type: 'text' | 'file' | 'voice') => void;
-  handleScheduleChat: (scheduledTime: Date) => void;
+  setCurrentUser: (_user: ChatUser) => void;
+  setOtherUser: (_user: ChatUser) => void;
+  setChatSettings: (_settings: ChatSettings) => void;
+  setIsChatEnabled: (_enabled: boolean) => void;
+  handleSendMessage: (_message: string, _type: 'text' | 'file' | 'voice') => void;
+  handleScheduleChat: (_scheduledTime: Date) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -52,13 +52,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     requiresLessonCompletion: 2,
   });
 
-  const handleSendMessage = (message: string, type: 'text' | 'file' | 'voice') => {
-    console.log('Message sent:', message, 'Type:', type);
+  const handleSendMessage = (_message: string, _type: 'text' | 'file' | 'voice') => {
     // TODO: Implement actual message sending logic
   };
 
-  const handleScheduleChat = (scheduledTime: Date) => {
-    console.log('Chat scheduled for:', scheduledTime);
+  const handleScheduleChat = (_scheduledTime: Date) => {
     // TODO: Implement actual chat scheduling logic
   };
 

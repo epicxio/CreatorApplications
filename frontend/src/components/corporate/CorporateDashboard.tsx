@@ -8,7 +8,6 @@ import {
   CardContent,
   CardHeader,
   Avatar,
-  IconButton,
   LinearProgress,
   styled,
 } from '@mui/material';
@@ -28,6 +27,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   minHeight: '100vh',
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StatsCard = styled(Card)(({ theme }) => ({
   height: '100%',
   display: 'flex',

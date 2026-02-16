@@ -93,21 +93,11 @@ const ProtectedLayout: React.FC = () => {
               requiresCourseEnrollment: false,
               requiresLessonCompletion: 0,
             }}
-            onSendMessage={(message, type) => {
-              console.log('Global chat message:', message, type);
-            }}
-            onScheduleChat={(scheduledTime) => {
-              console.log('Global chat scheduled:', scheduledTime);
-            }}
-            onCreateChannel={(channelData) => {
-              console.log('Create channel:', channelData);
-            }}
-            onJoinChannel={(channelId) => {
-              console.log('Join channel:', channelId);
-            }}
-            onStartDM={(userId) => {
-              console.log('Start DM with:', userId);
-            }}
+            onSendMessage={() => {}}
+            onScheduleChat={() => {}}
+            onCreateChannel={() => {}}
+            onJoinChannel={() => {}}
+            onStartDM={() => {}}
           />
         )}
       </Box>

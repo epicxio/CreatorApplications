@@ -1,4 +1,4 @@
-import { Box, Typography, Button, Container, styled, keyframes } from '@mui/material';
+import { Box, Typography, Container, styled, keyframes } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useEffect, useState, useRef } from 'react';
@@ -275,13 +275,14 @@ const AnimatedCounter = ({ value }: { value: string }) => {
       { threshold: 0.5 }
     );
 
-    if (ref.current) {
-      observer.observe(ref.current);
+    const node = ref.current;
+    if (node) {
+      observer.observe(node);
     }
 
     return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current);
+      if (node) {
+        observer.unobserve(node);
       }
     };
   }, [value, hasAnimated]);

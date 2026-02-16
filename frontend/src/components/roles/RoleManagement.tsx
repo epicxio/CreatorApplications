@@ -21,24 +21,15 @@ import {
   FormControlLabel,
   Alert,
   CircularProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  FormGroup,
-  Checkbox,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Security as SecurityIcon,
-  ExpandMore as ExpandMoreIcon,
   PersonOutline,
-  ArticleOutlined,
-  CampaignOutlined,
   StorefrontOutlined,
   StarOutline,
-  AnalyticsOutlined,
   WorkOutline,
   ManageAccountsOutlined,
   AdminPanelSettingsOutlined,
@@ -50,7 +41,7 @@ import {
 } from '@mui/icons-material';
 import roleService, { Role, CreateRoleData, Permission } from '../../services/roleService';
 import userService, { User } from '../../services/userService';
-import { permissionResources, PermissionResource } from '../../config/permissions';
+import { permissionResources } from '../../config/permissions';
 import { permissionActions } from '../../config/permissions';
 import { useAuth } from '../../context/AuthContext';
 
@@ -72,7 +63,7 @@ const userTypeIcons: { [key: string]: React.ReactElement } = {
     superadmin: <ShieldOutlined color="primary" />,
 };
 
-const permissionIcons = permissionResources.reduce((acc, resource) => {
+const _permissionIcons = permissionResources.reduce((acc, resource) => {
   acc[resource.name] = <resource.IconComponent />;
   return acc;
 }, {} as Record<string, React.ReactElement>);
@@ -103,7 +94,7 @@ const RoleManagement: React.FC = () => {
   });
 
   const { user } = useAuth();
-  const isSuperAdmin = user && (user.role?.name === 'Super Admin' || user.role?.name === 'superadmin');
+  const _isSuperAdmin = user && (user.role?.name === 'Super Admin' || user.role?.name === 'superadmin');
 
   useEffect(() => {
     fetchData();
@@ -123,15 +114,14 @@ const RoleManagement: React.FC = () => {
       setAvailablePermissions(permissionsData);
       setAvailableUserTypes(userTypesData);
       setUsers(usersData);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch required data. Please try again.');
-      console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const groupedPermissions = useMemo(() => {
+  const _groupedPermissions = useMemo(() => {
     return availablePermissions.reduce((acc, permission) => {
       const resource = permission.resource || 'General';
       acc[resource] = acc[resource] || [];
@@ -159,8 +149,8 @@ const RoleManagement: React.FC = () => {
         // Fetching permissions will trigger auto-sync on backend
         const permissionsData = await roleService.getPermissions();
         setAvailablePermissions(permissionsData);
-      } catch (error) {
-        console.error('Error syncing permissions:', error);
+      } catch {
+        // Sync permissions failed
       }
     }
     
@@ -180,9 +170,8 @@ const RoleManagement: React.FC = () => {
       try {
         await roleService.deleteRole(roleId);
         await fetchData();
-      } catch (err) {
+      } catch {
         setError('Failed to delete role. Please try again.');
-        console.error('Error deleting role:', err);
       }
     }
   };
@@ -224,9 +213,8 @@ const RoleManagement: React.FC = () => {
       }
       setOpenDialog(false);
       await fetchData();
-    } catch (err) {
+    } catch {
       setError('Failed to save role. Please try again.');
-      console.error('Error saving role:', err);
     }
   };
   
@@ -560,7 +548,7 @@ const RoleManagement: React.FC = () => {
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        {user.userType && userTypeIcons[user.userType.name.toLowerCase()] || <PersonOutline color="primary" />}
+                        {(user.userType && userTypeIcons[user.userType.name.toLowerCase()]) || <PersonOutline color="primary" />}
                         <Box>
                           <Typography>{user.name}</Typography>
                           <Typography variant="body2" color="text.secondary">{user.email}</Typography>

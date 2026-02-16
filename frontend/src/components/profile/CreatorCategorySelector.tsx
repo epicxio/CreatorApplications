@@ -73,7 +73,6 @@ export default function CreatorCategorySelector({ user, creatorId, onSave }: Cre
         /^[a-fA-F0-9]{24}$/.test(mainCategoryId)
       )
       .map(([mainCategoryId, subCategoryIds]) => ({ mainCategoryId, subCategoryIds }));
-    console.log('categoriesToSave', categoriesToSave);
     if (categoriesToSave.length === 0) {
       setError('Please select at least one category and subcategory.');
       return;

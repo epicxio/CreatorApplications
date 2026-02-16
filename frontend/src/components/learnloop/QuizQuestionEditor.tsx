@@ -11,12 +11,9 @@ import {
   MenuItem,
   Radio,
   Checkbox,
-  FormControlLabel,
-  Switch,
   IconButton,
   Card,
   CardContent,
-  Divider,
   Chip,
   Accordion,
   AccordionSummary,
@@ -42,12 +39,12 @@ interface QuizQuestionEditorProps {
   onChange: (value: QuizQuestion[]) => void;
 }
 
-const QuizQuestionEditor: React.FC<QuizQuestionEditorProps> = ({ value, onChange }) => {
-  const [questions, setQuestions] = useState<QuizQuestion[]>(value || []);
+const QuizQuestionEditor: React.FC<QuizQuestionEditorProps> = ({ value: initialValue, onChange }) => {
+  const [questions, setQuestions] = useState<QuizQuestion[]>(initialValue || []);
 
   useEffect(() => {
-    setQuestions(value || []);
-  }, [value]);
+    setQuestions(initialValue || []);
+  }, [initialValue]);
 
   const addQuestion = () => {
     const newQuestion: QuizQuestion = {

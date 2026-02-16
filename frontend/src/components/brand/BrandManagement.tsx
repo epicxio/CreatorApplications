@@ -23,7 +23,6 @@ import {
   Chip,
   Grid,
   styled,
-  OutlinedInput,
   Autocomplete,
   Switch,
   FormControlLabel,
@@ -36,7 +35,6 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
-  School as SchoolIcon,
   Store as StoreIcon,
   Link as LinkIcon,
   Email as EmailIcon,
@@ -298,7 +296,7 @@ export const BrandManagement: React.FC = () => {
 interface BrandDialogProps {
   open: boolean;
   onClose: () => void;
-  onSave: (brandData: Partial<Brand>) => void;
+  onSave: (_brandData: Partial<Brand>) => void;
   brand: Brand | null;
 }
 

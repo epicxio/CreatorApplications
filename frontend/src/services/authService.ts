@@ -12,9 +12,12 @@ class AuthService {
         email,
         password
       });
-      return response.data.token;
+      // Return both token and user data for faster login
+      return {
+        token: response.data.token,
+        user: response.data.user
+      };
     } catch (error) {
-      console.error('Error during login:', error);
       throw error;
     }
   }
@@ -28,10 +31,10 @@ class AuthService {
       });
       return response.data;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
       throw error;
     }
   }
 }
 
-export default new AuthService(); 
+const authService = new AuthService();
+export default authService; 

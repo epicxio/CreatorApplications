@@ -187,6 +187,8 @@ const courseSchema = new mongoose.Schema({
   // Step 4: Certificate
   certificateEnabled: { type: Boolean, default: false },
   certificateTemplate: { type: String, default: '1' },
+  /** URL of the certificate template PDF uploaded by creator (stored in S3 or local). Used when issuing learner certificates. */
+  certificateTemplatePdfUrl: { type: String },
   certificateTitle: { type: String, default: 'Certificate of Completion' },
   certificateDescription: { 
     type: String, 
@@ -194,6 +196,7 @@ const courseSchema = new mongoose.Schema({
   },
   certificateCompletionPercentage: { type: Number, default: 100 },
   certificateApplicationLogoEnabled: { type: Boolean, default: true },
+  certificateApplicationLogo: String, // URL or base64 - application/course logo on certificate
   certificateSignatures: [certificateSignatureSchema],
   certificateCreatorLogo: String, // URL or base64
   
@@ -214,15 +217,25 @@ const courseSchema = new mongoose.Schema({
   // Pricing mode
   globalPricingEnabled: { type: Boolean, default: true },
   currencySpecificPricingEnabled: { type: Boolean, default: false },
+  // Which currencies are enabled for payments: { INR: true, USD: false, EUR: false, GBP: false }
+  enabledCurrencies: { type: mongoose.Schema.Types.Mixed, default: () => ({ INR: true, USD: true, EUR: true, GBP: true }) },
   // EMI/Installments
   installmentsOn: { type: Boolean, default: false },
   installmentPeriod: { type: Number, default: 30 }, // days
   numberOfInstallments: { type: Number, default: 3 },
   bufferTime: { type: Number, default: 7 }, // days
   
+  // Payment methods: { universal: { 'Credit/Debit Cards': true, 'Buy Now Pay Later': true }, USD: { ... }, INR: { ... } }
+  paymentMethods: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+  // Payment settings
+  requirePaymentBeforeAccess: { type: Boolean, default: true },
+  sendPaymentReceipts: { type: Boolean, default: true },
+  enableAutomaticInvoicing: { type: Boolean, default: false },
+  
   // Step 6: Additional Details
   affiliateActive: { type: Boolean, default: false },
   affiliateRewardPercentage: { type: Number, default: 10 },
+  /** Course-level configuration: when true, application watermark is removed from curriculum videos/documents for this course. Stored in collections. */
   watermarkRemovalEnabled: { type: Boolean, default: false },
   faqs: [faqSchema],
   
@@ -252,6 +265,13 @@ const courseSchema = new mongoose.Schema({
   // Statistics
   enrollments: { type: Number, default: 0 },
   completionRate: { type: Number, default: 0 },
+
+  // Publish history: version, date, and snapshot of what was saved for diff/display
+  publishHistory: [{
+    version: { type: Number, required: true },
+    publishedAt: { type: Date, default: Date.now },
+    snapshot: { type: mongoose.Schema.Types.Mixed }
+  }],
   
   // Timestamps
   createdAt: { type: Date, default: Date.now },

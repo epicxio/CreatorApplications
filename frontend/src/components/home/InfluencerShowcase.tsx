@@ -1,18 +1,7 @@
-import { Box, Typography, Container, Card, CardContent, Avatar, Chip, styled, keyframes } from '@mui/material';
+import { Box, Typography, Container, CardContent, Avatar, Chip, styled } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { PlayArrow, TrendingUp, People, Star } from '@mui/icons-material';
-
-const slideIn = keyframes`
-  from {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-`;
 
 const SectionContainer = styled(Container)`
   padding: 8rem 2rem;

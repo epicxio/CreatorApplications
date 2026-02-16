@@ -1,135 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   Avatar,
   Grid,
-  Button,
   Chip,
   IconButton,
   styled,
   TextField,
   Card,
   CardContent,
-  Divider,
-  Alert
 } from '@mui/material';
 import {
-  Person,
-  Email,
-  Shield,
-  CameraAlt,
   Save,
   Cancel,
   Edit as EditIcon,
   InfoOutlined
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
 import { CameraCaptureModal } from '../common/CameraCaptureModal';
 import { AvatarChoiceModal } from '../common/AvatarChoiceModal';
 import { User as BaseUser } from '../../services/userService';
 import api from '../../services/api';
-import LinearProgress from '@mui/material/LinearProgress';
 import CreatorCategorySelector from './CreatorCategorySelector';
-import CircularProgress from '@mui/material/CircularProgress';
-
-const FuturisticBox = styled(motion.div)`
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  padding: 2rem;
-  color: #fff;
-  position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(108, 99, 255, 0.15) 0%, rgba(108, 99, 255, 0) 70%);
-    animation: rotate 15s linear infinite;
-  }
-
-  @keyframes rotate {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
-const ProfileHeader = styled(FuturisticBox)`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 2rem;
-`;
-
-const ProfileAvatarContainer = styled(Box)`
-  position: relative;
-  margin-bottom: 1rem;
-
-  &:hover .edit-icon {
-    opacity: 1;
-  }
-`;
-
-const ProfileAvatar = styled(Avatar)`
-  width: 120px;
-  height: 120px;
-  border: 4px solid #6C63FF;
-  box-shadow: 0 0 20px rgba(108, 99, 255, 0.5);
-  cursor: pointer;
-  transition: transform 0.3s ease;
-
-  &:hover {
-    transform: scale(1.05);
-  }
-`;
-
-const EditIconOverlay = styled(Box)`
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: #6C63FF;
-  border-radius: 50%;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-
-  &.edit-icon {
-    pointer-events: auto;
-  }
-`;
-
-const InfoCard = styled(FuturisticBox)`
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-`;
-
-const InfoIcon = styled(Box)`
-  background: rgba(108, 99, 255, 0.2);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6C63FF;
-`;
 
 const StyledTextField = styled(TextField)({
   '& .MuiOutlinedInput-root': {
@@ -164,7 +57,7 @@ type User = BaseUser & {
 
 interface FuturisticProfileProps {
   user: User | null;
-  onUpdateUser: (data: Partial<User>) => Promise<void>;
+  onUpdateUser: (_data: Partial<User>) => Promise<void>;
   hideCategoriesSection?: boolean;
 }
 
@@ -178,7 +71,6 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
   const [kyc, setKyc] = useState<any>(null);
   const [categoriesComplete, setCategoriesComplete] = useState(false);
   const [profileCompletion, setProfileCompletion] = useState(0);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -236,8 +128,7 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
           if (Object.keys(updatedData).length > 0) {
             await onUpdateUser(updatedData);
           }
-        } catch (error) {
-          console.error("Failed to update user:", error);
+        } catch {
         } finally {
           setIsSaving(false);
         }
@@ -265,9 +156,7 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
     if (user && onUpdateUser) {
       try {
         await onUpdateUser({ profileImage: url });
-      } catch (error) {
-        // Optionally show error to user
-        console.error("Failed to update avatar:", error);
+      } catch {
       }
     }
   };
@@ -278,9 +167,7 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
     if (user && onUpdateUser) {
       try {
         await onUpdateUser({ profileImage: imageSrc });
-      } catch (error) {
-        // Optionally show error to user
-        console.error("Failed to update avatar:", error);
+      } catch {
       }
     }
   };
@@ -309,7 +196,22 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
     if (docs.length === 0) return 'Document Not Provided';
     const verifiedDoc = docs.find((d: any) => d.status === 'verified');
     if (verifiedDoc) return verifiedDoc.documentNumber;
-    return 'Yet to be verified';
+    // Latest doc of this type (by createdAt) to show status when not verified
+    const sorted = [...docs].sort((a: any, b: any) =>
+      new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+    const latest = sorted[0];
+    const status = latest?.status;
+    switch (status) {
+      case 'pending':
+        return 'Uploaded – awaiting verification';
+      case 'rejected':
+        return 'Verification failed – please resubmit';
+      case 'expired':
+        return 'Expired';
+      default:
+        return 'Yet to be verified';
+    }
   };
 
   if (!user) {
@@ -319,8 +221,6 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
       </Box>
     );
   }
-
-  const assignedScreens = user.assignedScreens || ['Dashboard'];
 
   const creatorId = String(user?._id || "");
 

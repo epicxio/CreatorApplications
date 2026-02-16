@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -11,14 +11,9 @@ import {
   Button,
   Chip,
   List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemSecondaryAction,
   Avatar,
   LinearProgress,
-  Paper,
-  Divider
+  Paper
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -33,6 +28,7 @@ import {
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { progressService } from '../services/progressService';
+import { courseService } from '../services/courseService';
 import LearningAnalytics from '../components/learning/LearningAnalytics';
 import LiveSessionsComponent from '../components/learning/LiveSessionsComponent';
 import { useNavigate } from 'react-router-dom';
@@ -57,46 +53,55 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other })
   );
 };
 
+const defaultStats = {
+  totalCourses: 0,
+  completedCourses: 0,
+  totalTimeSpent: 0,
+  averageCompletionRate: 0
+};
+
 const LearningDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
+  const [stats, setStats] = useState(defaultStats);
+  const [recentCourses, setRecentCourses] = useState<Array<{ id: string; name: string; progress: number; lastAccessed: string; nextLesson: string; instructor: string }>>([]);
 
-  // Get learning statistics
-  const stats = user?._id ? progressService.getLearningStats(user._id) : {
-    totalCourses: 0,
-    completedCourses: 0,
-    totalTimeSpent: 0,
-    averageCompletionRate: 0
-  };
-
-  // Mock recent courses data
-  const recentCourses = [
-    {
-      id: '1',
-      name: 'Motion Design 101',
-      progress: 75,
-      lastAccessed: '2025-01-20T10:30:00Z',
-      nextLesson: 'Understanding Keyframes',
-      instructor: 'Sarah Chen'
-    },
-    {
-      id: '2',
-      name: 'Web Development Bootcamp',
-      progress: 45,
-      lastAccessed: '2025-01-19T14:20:00Z',
-      nextLesson: 'CSS Styling Basics',
-      instructor: 'Mike Johnson'
-    },
-    {
-      id: '3',
-      name: 'Digital Marketing Mastery',
-      progress: 90,
-      lastAccessed: '2025-01-18T16:45:00Z',
-      nextLesson: 'Final Project',
-      instructor: 'Emily Rodriguez'
-    }
-  ];
+  useEffect(() => {
+    if (!user?._id) return;
+    const load = async () => {
+      const response = await courseService.getMyProgress();
+      if (response.success && response.data.length > 0) {
+        const data = response.data;
+        setStats({
+          totalCourses: data.length,
+          completedCourses: data.filter(p => p.overallProgress === 100).length,
+          totalTimeSpent: data.reduce((sum, p) => sum + (p.timeSpent || 0), 0),
+          averageCompletionRate: data.length > 0
+            ? Math.round(data.reduce((sum, p) => sum + p.overallProgress, 0) / data.length)
+            : 0
+        });
+        const sorted = [...data].sort(
+          (a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime()
+        );
+        setRecentCourses(
+          sorted.slice(0, 5).map(p => ({
+            id: p.courseId,
+            name: `Course ${p.courseId}`,
+            progress: p.overallProgress,
+            lastAccessed: p.lastAccessed,
+            nextLesson: '',
+            instructor: ''
+          }))
+        );
+      } else {
+        const fallback = progressService.getLearningStats(user._id);
+        setStats(fallback);
+        setRecentCourses([]);
+      }
+    };
+    load();
+  }, [user?._id]);
 
   // Mock upcoming live sessions
   const upcomingSessions = [
@@ -142,9 +147,8 @@ const LearningDashboard: React.FC = () => {
     navigate(`/courses/${courseId}`);
   };
 
-  const handleJoinSession = (sessionId: string) => {
+  const handleJoinSession = (_sessionId: string) => {
     // Navigate to live session or open meeting link
-    console.log('Joining session:', sessionId);
   };
 
   return (
@@ -467,7 +471,7 @@ const LearningDashboard: React.FC = () => {
           <TabPanel value={activeTab} index={2}>
             <LiveSessionsComponent
               courseId="all"
-              onJoinSession={(session) => console.log('Joining session:', session)}
+              onJoinSession={() => {}}
             />
           </TabPanel>
 

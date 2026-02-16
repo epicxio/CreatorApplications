@@ -8,8 +8,7 @@ class ProgressService {
     try {
       const stored = localStorage.getItem(this.storageKey);
       return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Error reading progress from localStorage:', error);
+    } catch {
       return [];
     }
   }
@@ -18,8 +17,8 @@ class ProgressService {
   private saveProgress(progress: Progress[]): void {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(progress));
-    } catch (error) {
-      console.error('Error saving progress to localStorage:', error);
+    } catch {
+      // Ignore write errors
     }
   }
 
@@ -33,6 +32,39 @@ class ProgressService {
   getAllProgress(userId: string): Progress[] {
     const allProgress = this.getStoredProgress();
     return allProgress.filter(p => p.userId === userId);
+  }
+
+  // Sync one course's progress from API into localStorage (so getNextLesson etc. use backend data)
+  syncProgressFromApi(
+    courseId: string,
+    userId: string,
+    data: {
+      overallProgress?: number;
+      completedLessons?: string[];
+      lastAccessed?: string;
+      enrolledAt?: string;
+    }
+  ): void {
+    const allProgress = this.getStoredProgress();
+    let progress = allProgress.find(p => p.courseId === courseId && p.userId === userId);
+    if (!progress) {
+      progress = {
+        courseId,
+        userId,
+        overallProgress: data.overallProgress ?? 0,
+        completedLessons: data.completedLessons ?? [],
+        timeSpent: 0,
+        lastAccessed: data.lastAccessed ?? new Date().toISOString(),
+        enrolledAt: data.enrolledAt ?? new Date().toISOString()
+      };
+      allProgress.push(progress);
+    } else {
+      progress.overallProgress = data.overallProgress ?? progress.overallProgress;
+      progress.completedLessons = data.completedLessons ?? progress.completedLessons;
+      progress.lastAccessed = data.lastAccessed ?? progress.lastAccessed;
+      if (data.enrolledAt) progress.enrolledAt = data.enrolledAt;
+    }
+    this.saveProgress(allProgress);
   }
 
   // Initialize progress for a new course enrollment
@@ -235,8 +267,7 @@ class ProgressService {
         return true;
       }
       return false;
-    } catch (error) {
-      console.error('Error importing progress:', error);
+    } catch {
       return false;
     }
   }

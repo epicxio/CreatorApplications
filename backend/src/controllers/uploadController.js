@@ -1,30 +1,9 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
-const { v4: uuidv4 } = require('uuid');
+const s3Service = require('../services/s3Service');
 
-// Helper function to create storage with a fixed upload type
-const createStorage = (uploadType) => {
-  return multer.diskStorage({
-    destination: async (req, file, cb) => {
-      const baseDir = process.env.UPLOAD_BASE_DIR || path.join(__dirname, '../../uploads');
-      const uploadDir = path.join(baseDir, 'courses', uploadType);
-      
-      // Ensure directory exists
-      try {
-        await fs.mkdir(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-      } catch (error) {
-        cb(error, null);
-      }
-    },
-    filename: (req, file, cb) => {
-      // Generate unique filename: timestamp-uuid-originalname
-      const uniqueName = `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`;
-      cb(null, uniqueName);
-    }
-  });
-};
+// Use memory storage for S3 uploads (files will be uploaded to S3, not saved locally)
+const memoryStorage = multer.memoryStorage();
 
 // File filter for PDFs
 const pdfFilter = (req, file, cb) => {
@@ -153,9 +132,9 @@ const audioFilter = (req, file, cb) => {
   }
 };
 
-// Multer configurations - each uses its own storage with fixed folder
+// Multer configurations - using memory storage for S3 uploads
 const uploadPDF = multer({
-  storage: createStorage('pdfs'), // Always save to 'pdfs' folder
+  storage: memoryStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB for PDFs
   },
@@ -163,7 +142,7 @@ const uploadPDF = multer({
 });
 
 const uploadImage = multer({
-  storage: createStorage('images'), // Always save to 'images' folder
+  storage: memoryStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB for images
   },
@@ -171,7 +150,7 @@ const uploadImage = multer({
 });
 
 const uploadDocument = multer({
-  storage: createStorage('documents'), // Always save to 'documents' folder
+  storage: memoryStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB for documents
   },
@@ -180,7 +159,7 @@ const uploadDocument = multer({
 
 // Legacy resource upload (for backward compatibility)
 const uploadResource = multer({
-  storage: createStorage('resources'), // Always save to 'resources' folder
+  storage: memoryStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB for resources
   },
@@ -188,15 +167,15 @@ const uploadResource = multer({
 });
 
 const uploadVideo = multer({
-  storage: createStorage('videos'), // Always save to 'videos' folder
+  storage: memoryStorage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB for videos (adjust as needed)
+    fileSize: 500 * 1024 * 1024, // 500MB for videos (matching S3 config)
   },
   fileFilter: videoFilter
 });
 
 const uploadThumbnail = multer({
-  storage: createStorage('thumbnails'), // Always save to 'thumbnails' folder
+  storage: memoryStorage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB for thumbnails
   },
@@ -204,12 +183,99 @@ const uploadThumbnail = multer({
 });
 
 const uploadAudio = multer({
-  storage: createStorage('audio'), // Always save to 'audio' folder
+  storage: memoryStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB for audio files
+    fileSize: 50 * 1024 * 1024, // 50MB for audio files (matching S3 config)
   },
   fileFilter: audioFilter
 });
+
+// Helper function to upload file to S3
+const uploadFileToS3 = async (req, fileType, file) => {
+  const creatorId = req.user._id.toString();
+  const courseId = req.body.courseId || req.query.courseId;
+  
+  // Debug logging
+  console.log('📤 Upload Request Details:');
+  console.log('   File Type:', fileType);
+  console.log('   Creator ID:', creatorId);
+  console.log('   Course ID from body:', req.body.courseId);
+  console.log('   Course ID from query:', req.query.courseId);
+  console.log('   Final Course ID:', courseId);
+  console.log('   File Name:', file.originalname);
+  console.log('   File Size:', file.size);
+  console.log('   File MIME:', file.mimetype);
+  
+  if (!courseId) {
+    console.error('❌ Course ID missing!');
+    console.error('   Request body keys:', Object.keys(req.body));
+    console.error('   Request query keys:', Object.keys(req.query));
+    throw new Error('Course ID is required. Please provide courseId in request body or query.');
+  }
+
+  // Map upload types to validation types (for s3Service.validateFile)
+  const validationTypeMap = {
+    'pdf': 'document',
+    'image': 'image',
+    'document': 'document',
+    'resource': 'document',
+    'video': 'video',
+    'thumbnail': 'image', // Thumbnails are images
+    'audio': 'audio'
+  };
+
+  // Map upload types to S3 folder names (for S3 key generation)
+  const s3FolderMap = {
+    'pdf': 'documents',
+    'image': 'images',
+    'document': 'documents',
+    'resource': 'documents',
+    'video': 'videos',
+    'thumbnail': 'thumbnails',
+    'audio': 'audio'
+  };
+
+  const validationType = validationTypeMap[fileType] || 'document';
+  const s3Folder = s3FolderMap[fileType] || 'documents';
+  
+  // Validate with validation type
+  const validation = s3Service.validateFile(file, validationType);
+  if (!validation.isValid) {
+    throw new Error(`File validation failed: ${validation.errors.join(', ')}`);
+  }
+
+  // Generate unique filename
+  const uniqueFilename = s3Service.generateUniqueFilename(file.originalname);
+
+  // Generate S3 key with folder name
+  const s3Key = s3Service.generateS3Key('creator', creatorId, s3Folder, courseId, uniqueFilename);
+
+  // Upload to S3
+  const result = await s3Service.uploadFile(
+    file.buffer,
+    s3Key,
+    file.mimetype,
+    {
+      originalName: file.originalname,
+      uploadedBy: creatorId,
+      courseId: courseId,
+      fileType: validationType
+    }
+  );
+
+  return {
+    success: true,
+    filename: uniqueFilename,
+    originalName: file.originalname,
+    s3Key: result.key,
+    url: result.url,
+    presignedUrl: await s3Service.getPresignedUrl(result.key),
+    size: file.size,
+    mimetype: file.mimetype,
+    location: result.location,
+    bucket: result.bucket
+  };
+};
 
 // Upload PDF file
 const uploadPDFFile = async (req, res) => {
@@ -221,22 +287,23 @@ const uploadPDFFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/pdfs/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'pdf', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'PDF file uploaded successfully'
+      message: 'PDF file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading PDF:', error);
+    console.error('Error uploading PDF to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload PDF file',
@@ -255,25 +322,26 @@ const uploadImageFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/images/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'image', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Image file uploaded successfully'
+      message: 'Image file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('Error uploading image to S3:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to upload image file',
+      message: error.message || 'Failed to upload image file',
       error: error.message
     });
   }
@@ -289,22 +357,23 @@ const uploadDocumentFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/documents/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'document', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Document file uploaded successfully'
+      message: 'Document file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading document:', error);
+    console.error('Error uploading document to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload document file',
@@ -323,23 +392,23 @@ const uploadResourceFile = async (req, res) => {
       });
     }
 
-    // Generate URL path (relative to uploads directory)
-    const fileUrl = `/uploads/courses/resources/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'resource', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Resource file uploaded successfully'
+      message: 'Resource file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading resource:', error);
+    console.error('Error uploading resource to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload resource file',
@@ -358,22 +427,26 @@ const uploadMultipleResources = async (req, res) => {
       });
     }
 
-    const uploadedFiles = req.files.map(file => ({
-      filename: file.filename,
-      originalName: file.originalname,
-      path: file.path,
-      url: `/uploads/courses/resources/${file.filename}`,
-      size: file.size,
-      mimetype: file.mimetype
+    const uploadPromises = req.files.map(file => uploadFileToS3(req, 'resource', file));
+    const results = await Promise.all(uploadPromises);
+    
+    const uploadedFiles = results.map(result => ({
+      filename: result.filename,
+      originalName: result.originalName,
+      s3Key: result.s3Key,
+      url: result.url,
+      presignedUrl: result.presignedUrl,
+      size: result.size,
+      mimetype: result.mimetype
     }));
     
     res.json({
       success: true,
       data: uploadedFiles,
-      message: `${uploadedFiles.length} resource file(s) uploaded successfully`
+      message: `${uploadedFiles.length} resource file(s) uploaded successfully to S3`
     });
   } catch (error) {
-    console.error('Error uploading resources:', error);
+    console.error('Error uploading resources to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload resource files',
@@ -392,22 +465,23 @@ const uploadVideoFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/videos/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'video', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Video file uploaded successfully'
+      message: 'Video file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading video:', error);
+    console.error('Error uploading video to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload video file',
@@ -426,22 +500,23 @@ const uploadThumbnailFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/thumbnails/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'thumbnail', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Thumbnail uploaded successfully'
+      message: 'Thumbnail uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading thumbnail:', error);
+    console.error('Error uploading thumbnail to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload thumbnail',
@@ -460,22 +535,23 @@ const uploadAudioFile = async (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/courses/audio/${req.file.filename}`;
+    const result = await uploadFileToS3(req, 'audio', req.file);
     
     res.json({
       success: true,
       data: {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        filename: result.filename,
+        originalName: result.originalName,
+        s3Key: result.s3Key,
+        url: result.url,
+        presignedUrl: result.presignedUrl,
+        size: result.size,
+        mimetype: result.mimetype
       },
-      message: 'Audio file uploaded successfully'
+      message: 'Audio file uploaded successfully to S3'
     });
   } catch (error) {
-    console.error('Error uploading audio:', error);
+    console.error('Error uploading audio to S3:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to upload audio file',

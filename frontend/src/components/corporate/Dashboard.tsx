@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Grid, Card, CardContent, Typography, Chip, Avatar, LinearProgress, Tooltip } from '@mui/material';
+import { Box, Grid, Card, CardContent, Typography, Chip, Avatar, LinearProgress } from '@mui/material';
 import { Group as GroupIcon, Business as BusinessIcon, SupervisorAccount as SupervisorAccountIcon, HourglassEmpty as HourglassEmptyIcon, CheckCircle as CheckCircleIcon, EmojiEvents as EmojiEventsIcon, Inventory as InventoryIcon, People as PeopleIcon } from '@mui/icons-material';
 
 // Mock data

@@ -15,9 +15,12 @@ const {
   getPendingCreators,
   approveCreator,
   rejectCreator,
+  suspendUser,
+  unsuspendUser,
   getCreatorCategories,
   updateCreatorCategories,
 } = require('../controllers/userController');
+const auth = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -68,9 +71,13 @@ router.post('/creator-signup', signupCreator);
 // Get all pending creators
 router.get('/creators/pending', getPendingCreators);
 // Approve creator
-router.post('/:id/approve', approveCreator);
+router.post('/:id/approve', auth, approveCreator);
 // Reject creator
-router.post('/:id/reject', rejectCreator);
+router.post('/:id/reject', auth, rejectCreator);
+// Suspend user (body: { reason }). Cannot suspend Super Admin.
+router.post('/:id/suspend', auth, suspendUser);
+// Unsuspend (reactivate) user
+router.post('/:id/unsuspend', auth, unsuspendUser);
 
 // Creator categories endpoints
 router.get('/:id/categories', getCreatorCategories);

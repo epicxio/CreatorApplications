@@ -27,8 +27,8 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
 import LearningDashboard from './pages/LearningDashboard';
+import MyAffiliateCodesPage from './pages/MyAffiliateCodesPage';
 
-const GetToKnowPage = () => <div>Get To Know</div>;
 const DataBoardPage = () => <div>Data Board</div>;
 const CanvasCreatorPage = () => <div>Canvas Creator</div>;
 const LovePage = () => <div>Love</div>;
@@ -112,6 +112,7 @@ export const AppRoutes: React.FC = () => {
 
         {/* Learner Course Routes */}
         <Route path="/learning" element={<LearningDashboard />} />
+        <Route path="/affiliate" element={<MyAffiliateCodesPage />} />
         <Route path="/courses" element={<CoursesPage />} />
         <Route path="/courses/:courseId" element={<CourseDetailPage />} />
         <Route path="/courses/:courseId/lesson/:lessonId" element={<LessonPlayerPage />} />

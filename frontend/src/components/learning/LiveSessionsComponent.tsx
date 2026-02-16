@@ -25,23 +25,20 @@ import {
 import {
   LiveTv as LiveIcon,
   VideoCall as VideoCallIcon,
-  Schedule as ScheduleIcon,
   People as PeopleIcon,
   AccessTime as AccessTimeIcon,
   CalendarToday as CalendarIcon,
-  OpenInNew as OpenInNewIcon,
   Download as DownloadIcon,
   Bookmark as BookmarkIcon,
   BookmarkBorder as BookmarkBorderIcon,
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon
+  PlayArrow as PlayIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { LiveSession } from '../../types/course';
 
 interface LiveSessionsComponentProps {
   courseId: string;
-  onJoinSession?: (session: LiveSession) => void;
+  onJoinSession?: (_session: LiveSession) => void;
 }
 
 const LiveSessionsComponent: React.FC<LiveSessionsComponentProps> = ({
@@ -156,8 +153,8 @@ const LiveSessionsComponent: React.FC<LiveSessionsComponentProps> = ({
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       setSessions(mockSessions);
-    } catch (error) {
-      console.error('Error loading sessions:', error);
+    } catch {
+      // Sessions failed to load
     } finally {
       setLoading(false);
     }
@@ -239,6 +236,7 @@ const LiveSessionsComponent: React.FC<LiveSessionsComponentProps> = ({
   // Load sessions on mount
   useEffect(() => {
     loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- courseId is the trigger
   }, [courseId]);
 
   if (loading) {

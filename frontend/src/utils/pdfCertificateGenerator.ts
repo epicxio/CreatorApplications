@@ -82,6 +82,12 @@ export const certificateTemplates: CertificateTemplate[] = [
   }
 ];
 
+/** Return jsPDF image format from a data URL; use when drawing so JPEG-compressed images render correctly. */
+function getImageFormat(dataUrl: string): 'PNG' | 'JPEG' {
+  if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) return 'JPEG';
+  return 'PNG';
+}
+
 export class PDFCertificateGenerator {
   private doc: jsPDF;
   private template: CertificateTemplate;
@@ -96,12 +102,10 @@ export class PDFCertificateGenerator {
   generate(): jsPDF {
     this.setupPage();
     this.drawBorder();
-    this.drawWatermark();
     this.drawHeader();
     this.drawContent();
     this.drawSignatures();
     this.drawSeal();
-    this.drawCertificateNumber();
     this.drawLogos();
     
     return this.doc;
@@ -122,16 +126,6 @@ export class PDFCertificateGenerator {
     // Inner border
     this.doc.setLineWidth(0.5);
     this.doc.rect(15, 15, 267, 180);
-  }
-
-  private drawWatermark(): void {
-    if (!this.template.hasWatermark) return;
-
-    this.doc.setTextColor(this.template.accentColor);
-    this.doc.setFontSize(60);
-    this.doc.setFont(this.template.fontFamily, 'normal');
-    this.doc.setTextColor(255, 255, 255, 0.1);
-    this.doc.text('CERTIFICATE', 148.5, 105, { align: 'center', angle: 45 });
   }
 
   private drawHeader(): void {
@@ -185,11 +179,11 @@ export class PDFCertificateGenerator {
     this.doc.setTextColor(this.template.accentColor);
     this.doc.text(this.data.courseName, centerX, startY + 50, { align: 'center' });
 
-    // Completion date
+    // Completion date (keep clear of seal below)
     this.doc.setFontSize(10);
     this.doc.setFont(this.template.fontFamily, 'normal');
     this.doc.setTextColor(this.template.textColor);
-    this.doc.text(`Completed on: ${this.data.completionDate}`, centerX, startY + 65, { align: 'center' });
+    this.doc.text(`Completed on: ${this.data.completionDate}`, centerX, startY + 62, { align: 'center' });
   }
 
   private drawSignatures(): void {
@@ -202,12 +196,13 @@ export class PDFCertificateGenerator {
     this.doc.setLineWidth(0.5);
     this.doc.line(leftX - 20, startY, leftX + 20, startY);
 
-    // Add signature image if available
+    // Add signature image if available (format must match data URL: PNG or JPEG)
     if (this.data.instructorSignature) {
       try {
-        this.doc.addImage(this.data.instructorSignature, 'PNG', leftX - 15, startY - 8, 30, 12);
-      } catch (error) {
-        console.warn('Could not add instructor signature image:', error);
+        const fmt = getImageFormat(this.data.instructorSignature);
+        this.doc.addImage(this.data.instructorSignature, fmt, leftX - 15, startY - 8, 30, 12);
+      } catch {
+        // Optional image; skip if invalid
       }
     }
 
@@ -224,12 +219,13 @@ export class PDFCertificateGenerator {
     // Right signature (Dean)
     this.doc.line(rightX - 20, startY, rightX + 20, startY);
     
-    // Add signature image if available
+    // Add signature image if available (format must match data URL: PNG or JPEG)
     if (this.data.deanSignature) {
       try {
-        this.doc.addImage(this.data.deanSignature, 'PNG', rightX - 15, startY - 8, 30, 12);
-      } catch (error) {
-        console.warn('Could not add dean signature image:', error);
+        const fmt = getImageFormat(this.data.deanSignature);
+        this.doc.addImage(this.data.deanSignature, fmt, rightX - 15, startY - 8, 30, 12);
+      } catch {
+        // Optional image; skip if invalid
       }
     }
 
@@ -248,15 +244,13 @@ export class PDFCertificateGenerator {
     if (!this.template.hasSeal) return;
 
     const centerX = 148.5;
-    const centerY = 160; // Positioned above the certificate number area
+    const centerY = 172; // Below completion date with clear gap so they don't merge
 
-    // Add the actual seal image to the PDF
+    // Add the actual seal image to the PDF; format must match data URL
     if (this.data.sealImage) {
       try {
-        // Add seal with larger size
-        this.doc.addImage(this.data.sealImage, 'PNG', centerX - 18, centerY - 18, 36, 36);
-      } catch (error) {
-        console.warn('Could not add seal image to PDF:', error);
+        this.doc.addImage(this.data.sealImage, getImageFormat(this.data.sealImage), centerX - 18, centerY - 18, 36, 36);
+      } catch {
         // Fallback to simple circle if image fails
         this.doc.setFillColor(this.template.accentColor);
         this.doc.circle(centerX, centerY, 18, 'F');
@@ -280,30 +274,30 @@ export class PDFCertificateGenerator {
     const logoY = 25;
     const logoSize = 15;
 
-    // Draw application logo (left side - top-left corner)
+    // Draw application logo (left side - top-left corner); format must match data URL
     if (this.data.applicationLogo) {
       try {
-        this.doc.addImage(this.data.applicationLogo, 'PNG', 30, logoY, logoSize, logoSize);
-      } catch (error) {
-        console.warn('Could not add application logo image:', error);
+        this.doc.addImage(this.data.applicationLogo, getImageFormat(this.data.applicationLogo), 30, logoY, logoSize, logoSize);
+      } catch {
+        // Optional image; skip if invalid
       }
     }
 
     // Draw creator logo (center top - above title area)
     if (this.data.creatorLogo) {
       try {
-        this.doc.addImage(this.data.creatorLogo, 'PNG', centerX - logoSize/2, logoY - 8, logoSize, logoSize);
-      } catch (error) {
-        console.warn('Could not add creator logo image:', error);
+        this.doc.addImage(this.data.creatorLogo, getImageFormat(this.data.creatorLogo), centerX - logoSize/2, logoY - 8, logoSize, logoSize);
+      } catch {
+        // Optional image; skip if invalid
       }
     }
 
     // Draw course logo (right side - top-right corner)
     if (this.data.courseLogo) {
       try {
-        this.doc.addImage(this.data.courseLogo, 'PNG', 252, logoY, logoSize, logoSize);
-      } catch (error) {
-        console.warn('Could not add course logo image:', error);
+        this.doc.addImage(this.data.courseLogo, getImageFormat(this.data.courseLogo), 252, logoY, logoSize, logoSize);
+      } catch {
+        // Optional image; skip if invalid
       }
     }
   }
@@ -319,6 +313,74 @@ export const generateCertificate = (templateId: string, data: CertificateData): 
   const generator = new PDFCertificateGenerator(template, data);
   return generator.generate();
 };
+
+/** Returns the certificate PDF as a Blob for upload (e.g. to backend). */
+export const generateCertificateBlob = (templateId: string, data: CertificateData): Blob => {
+  const doc = generateCertificate(templateId, data);
+  return doc.output('blob') as Blob;
+};
+
+/**
+ * Fetches the course's certificate template PDF from URL, overlays learner data (name, date, course, cert number),
+ * and returns the filled PDF as a Blob. Used when the course has certificateTemplatePdfUrl set.
+ */
+export async function fillCertificateTemplateFromUrl(
+  templatePdfUrl: string,
+  data: CertificateData
+): Promise<Blob> {
+  const pdfLib = await import('pdf-lib');
+  const { PDFDocument, StandardFonts, rgb } = pdfLib;
+  const response = await fetch(templatePdfUrl, { mode: 'cors' });
+  if (!response.ok) throw new Error('Failed to fetch certificate template');
+  const arrayBuffer = await response.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pages = pdfDoc.getPages();
+  if (pages.length === 0) throw new Error('Certificate template has no pages');
+  const page = pages[0];
+  const { width, height } = page.getSize();
+  const centerX = width / 2;
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const textColor = rgb(0.2, 0.2, 0.2);
+
+  // Approximate positions (pdf-lib origin is bottom-left; y increases upward)
+  const yCourse = height - 80;
+  const yDesc = height - 120;
+  const yName = height - 160;
+  const ySignBelow = height - 200;
+  const yDate = height - 240;
+  const yCertNo = 60;
+  const fontSizeTitle = 20;
+  const fontSizeName = 18;
+  const fontSizeBody = 12;
+  const fontSizeSmall = 10;
+
+  const drawCentered = (text: string, y: number, size: number, useBold = false) => {
+    const f = useBold ? fontBold : font;
+    const textWidth = f.widthOfTextAtSize(text, size);
+    page.drawText(text, {
+      x: centerX - textWidth / 2,
+      y,
+      size,
+      font: f,
+      color: textColor
+    });
+  };
+
+  drawCentered(data.courseName || 'Course', yCourse, fontSizeTitle, true);
+  if (data.certificateDescription) {
+    drawCentered(data.certificateDescription, yDesc, fontSizeBody);
+  }
+  drawCentered(data.studentName, yName, fontSizeName, true);
+  if (data.signBelowText) {
+    drawCentered(data.signBelowText, ySignBelow, fontSizeBody);
+  }
+  drawCentered(`Completion date: ${data.completionDate}`, yDate, fontSizeSmall);
+  drawCentered(`Certificate #: ${data.certificateNumber}`, yCertNo, fontSizeSmall);
+
+  const bytes = await pdfDoc.save();
+  return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+}
 
 export const downloadCertificate = (templateId: string, data: CertificateData, filename?: string): void => {
   // Create a new PDF document
@@ -384,8 +446,8 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
   if (data.instructorSignature) {
     try {
       doc.addImage(data.instructorSignature, 'PNG', leftX - 15, signatureY - 8, 30, 12);
-    } catch (error) {
-      console.warn('Could not add instructor signature image:', error);
+    } catch {
+      // Optional image; skip if invalid
     }
   }
   
@@ -406,8 +468,8 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
   if (data.deanSignature) {
     try {
       doc.addImage(data.deanSignature, 'PNG', rightX - 15, signatureY - 8, 30, 12);
-    } catch (error) {
-      console.warn('Could not add dean signature image:', error);
+    } catch {
+      // Optional image; skip if invalid
     }
   }
   
@@ -435,8 +497,7 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
     try {
       // Add seal with larger size
       doc.addImage(data.sealImage, 'PNG', sealCenterX - 18, sealCenterY - 18, 36, 36);
-    } catch (error) {
-      console.warn('Could not add seal image to PDF:', error);
+    } catch {
       // Fallback to simple circle if image fails
       doc.setFillColor('#CD7F32');
       doc.circle(sealCenterX, sealCenterY, 18, 'F');
@@ -455,8 +516,8 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
   if (data.applicationLogo) {
     try {
       doc.addImage(data.applicationLogo, 'PNG', 30, logoY, logoSize, logoSize);
-    } catch (error) {
-      console.warn('Could not add application logo image:', error);
+    } catch {
+      // Optional image; skip if invalid
     }
   }
   
@@ -464,8 +525,8 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
   if (data.courseLogo) {
     try {
       doc.addImage(data.courseLogo, 'PNG', 252, logoY, logoSize, logoSize);
-    } catch (error) {
-      console.warn('Could not add course logo image:', error);
+    } catch {
+      // Optional image; skip if invalid
     }
   }
   
@@ -473,8 +534,8 @@ export const downloadCertificate = (templateId: string, data: CertificateData, f
   if (data.creatorLogo) {
     try {
       doc.addImage(data.creatorLogo, 'PNG', 148.5 - logoSize/2, logoY - 8, logoSize, logoSize);
-    } catch (error) {
-      console.warn('Could not add creator logo image:', error);
+    } catch {
+      // Optional image; skip if invalid
     }
   }
   

@@ -11,7 +11,6 @@ import {
   DialogActions,
   TextField,
   Chip,
-  Grid,
   styled,
   Tooltip,
   Avatar,
@@ -26,9 +25,6 @@ import {
 import {
   Email as EmailIcon,
   WhatsApp as WhatsAppIcon,
-  Person as PersonIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
   Send as SendIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';

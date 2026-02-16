@@ -3,7 +3,7 @@ import { Box, Typography, Container, styled, keyframes } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { ExpandMore, HelpOutline } from '@mui/icons-material';
 
-const pulse = keyframes`
+const _pulse = keyframes`
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 `;

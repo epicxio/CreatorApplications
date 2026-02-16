@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Stack,
-  Button,
   TextField,
   FormControl,
   InputLabel,
@@ -19,18 +18,40 @@ import {
 import {
   Payment as PaymentIcon,
   CreditCard as CreditCardIcon,
-  AccountBalance as BankIcon,
-  Receipt as ReceiptIcon,
-  Settings as SettingsIcon
+  Receipt as ReceiptIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
-interface PaymentDetailsStepProps {
-  // Add props as needed for payment configuration
+export interface PaymentDetailsPayload {
+  listedPrice: { INR: number; USD: number; EUR: number; GBP: number };
+  sellingPrice: { INR: number; USD: number; EUR: number; GBP: number };
+  globalPricingEnabled: boolean;
+  currencySpecificPricingEnabled: boolean;
+  /** Which currencies are enabled for payments (e.g. { INR: true, USD: false, EUR: false, GBP: false }) */
+  enabledCurrencies: { [key: string]: boolean };
+  installmentsOn: boolean;
+  installmentPeriod: number;
+  numberOfInstallments: number;
+  bufferTime: number;
+  paymentMethods: Record<string, { [key: string]: boolean }>;
+  requirePaymentBeforeAccess: boolean;
+  sendPaymentReceipts: boolean;
+  enableAutomaticInvoicing: boolean;
 }
 
-const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
-  const [pricingMode, setPricingMode] = React.useState<'global' | 'currency-specific'>('global');
+export interface PaymentDetailsInitialData extends PaymentDetailsPayload {}
+
+export interface PaymentDetailsStepRef {
+  getPaymentDetails: () => PaymentDetailsPayload;
+}
+
+interface PaymentDetailsStepProps {
+  initialData?: PaymentDetailsInitialData | null;
+  paymentDetailsRef?: React.RefObject<PaymentDetailsStepRef | null>;
+}
+
+const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(({ initialData, paymentDetailsRef }) => {
+  const [, setPricingMode] = React.useState<'global' | 'currency-specific'>('global');
   const [globalPricingEnabled, setGlobalPricingEnabled] = React.useState(true);
   const [currencySpecificPricingEnabled, setCurrencySpecificPricingEnabled] = React.useState(false);
   const [globalListPrice, setGlobalListPrice] = React.useState('15');
@@ -54,14 +75,15 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
     'INR': true
   });
 
-  // Memoize expensive data structures
+  // Memoize expensive data structures (includes Buy Now Pay Later)
   const universalPaymentMethods = React.useMemo(() => ({
     'Credit/Debit Cards': true,
     'PayPal': true,
     'Stripe': true,
     'Apple Pay': true,
     'Google Pay': true,
-    'Bank Transfer': true
+    'Bank Transfer': true,
+    'Buy Now Pay Later': true
   }), []);
 
   const paymentMethodsByCurrency = React.useMemo((): { [key: string]: { [key: string]: boolean } } => ({
@@ -71,7 +93,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Stripe': true,
       'Apple Pay': true,
       'Google Pay': true,
-      'Bank Transfer': false
+      'Bank Transfer': false,
+      'Buy Now Pay Later': true
     },
     'EUR': {
       'Credit/Debit Cards': true,
@@ -80,7 +103,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Apple Pay': true,
       'Google Pay': true,
       'SEPA Transfer': true,
-      'Bank Transfer': true
+      'Bank Transfer': true,
+      'Buy Now Pay Later': true
     },
     'GBP': {
       'Credit/Debit Cards': true,
@@ -88,7 +112,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Stripe': true,
       'Apple Pay': true,
       'Google Pay': true,
-      'Bank Transfer': true
+      'Bank Transfer': true,
+      'Buy Now Pay Later': true
     },
     'INR': {
       'Credit/Debit Cards': true,
@@ -97,7 +122,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Razorpay': true,
       'Net Banking': true,
       'PayPal': false,
-      'Google Pay': true
+      'Google Pay': true,
+      'Buy Now Pay Later': true
     }
   }), []);
 
@@ -107,7 +133,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
     'Stripe': true,
     'Apple Pay': true,
     'Google Pay': true,
-    'Bank Transfer': true
+    'Bank Transfer': true,
+    'Buy Now Pay Later': true
   });
 
   // EMI/Installment Configuration
@@ -115,7 +142,7 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
   const [installmentPeriod, setInstallmentPeriod] = React.useState(3);
   const [numberOfInstallments, setNumberOfInstallments] = React.useState(2);
   const [bufferTime, setBufferTime] = React.useState(0);
-  const [installmentPrices, setInstallmentPrices] = React.useState<{ [key: number]: string }>({});
+  const [, setInstallmentPrices] = React.useState<{ [key: number]: string }>({});
 
   const [enabledPaymentMethods, setEnabledPaymentMethods] = React.useState<{ [key: string]: { [key: string]: boolean } }>({
     'USD': {
@@ -124,7 +151,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Stripe': true,
       'Apple Pay': true,
       'Google Pay': true,
-      'Bank Transfer': false
+      'Bank Transfer': false,
+      'Buy Now Pay Later': true
     },
     'EUR': {
       'Credit/Debit Cards': true,
@@ -133,7 +161,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Apple Pay': true,
       'Google Pay': true,
       'SEPA Transfer': true,
-      'Bank Transfer': true
+      'Bank Transfer': true,
+      'Buy Now Pay Later': true
     },
     'GBP': {
       'Credit/Debit Cards': true,
@@ -141,7 +170,8 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Stripe': true,
       'Apple Pay': true,
       'Google Pay': true,
-      'Bank Transfer': true
+      'Bank Transfer': true,
+      'Buy Now Pay Later': true
     },
     'INR': {
       'Credit/Debit Cards': true,
@@ -151,12 +181,18 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
       'Net Banking': true,
       'PayPal': false,
       'Apple Pay': false,
-      'Google Pay': true
+      'Google Pay': true,
+      'Buy Now Pay Later': true
     }
   });
 
+  // Payment settings (persisted)
+  const [requirePaymentBeforeAccess, setRequirePaymentBeforeAccess] = React.useState(true);
+  const [sendPaymentReceipts, setSendPaymentReceipts] = React.useState(true);
+  const [enableAutomaticInvoicing, setEnableAutomaticInvoicing] = React.useState(false);
+
   // Currency symbol mapping
-  const currencySymbols: { [key: string]: string } = {
+  const _currencySymbols: { [key: string]: string } = {
     'USD': '$',
     'EUR': '€',
     'GBP': '£',
@@ -256,7 +292,7 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
     }));
   };
 
-  const handleInstallmentPriceChange = (installmentNumber: number, price: string) => {
+  const _handleInstallmentPriceChange = (installmentNumber: number, price: string) => {
     setInstallmentPrices(prev => ({
       ...prev,
       [installmentNumber]: price
@@ -305,7 +341,113 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
   // Initialize payment methods on component mount
   React.useEffect(() => {
     updatePaymentMethods();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
+
+  // Hydrate from initialData when course is loaded in builder or when returning to step 4
+  React.useEffect(() => {
+    if (!initialData) return;
+    setGlobalPricingEnabled(!!initialData.globalPricingEnabled);
+    setCurrencySpecificPricingEnabled(!!initialData.currencySpecificPricingEnabled);
+    const lp = (initialData.listedPrice || {}) as { USD?: number; INR?: number; EUR?: number; GBP?: number };
+    const sp = (initialData.sellingPrice || {}) as { USD?: number; INR?: number; EUR?: number; GBP?: number };
+    setGlobalListPrice(String(lp.USD ?? lp.INR ?? 0));
+    setGlobalActualPrice(String(sp.USD ?? sp.INR ?? 0));
+    setCurrencyListPrices({
+      USD: String(lp.USD ?? 0),
+      EUR: String(lp.EUR ?? 0),
+      GBP: String(lp.GBP ?? 0),
+      INR: String(lp.INR ?? 0)
+    });
+    setCurrencyActualPrices({
+      USD: String(sp.USD ?? 0),
+      EUR: String(sp.EUR ?? 0),
+      GBP: String(sp.GBP ?? 0),
+      INR: String(sp.INR ?? 0)
+    });
+    // Restore which currencies are enabled/disabled (e.g. only INR on, others off)
+    if (initialData.enabledCurrencies && typeof initialData.enabledCurrencies === 'object') {
+      const ec = initialData.enabledCurrencies as { [key: string]: boolean };
+      setEnabledCurrencies(prev => ({ ...prev, ...ec }));
+    }
+    setEmiEnabled(!!initialData.installmentsOn);
+    setInstallmentPeriod(initialData.installmentPeriod ?? 3);
+    setNumberOfInstallments(initialData.numberOfInstallments ?? 2);
+    setBufferTime(initialData.bufferTime ?? 0);
+    setRequirePaymentBeforeAccess(!!initialData.requirePaymentBeforeAccess);
+    setSendPaymentReceipts(initialData.sendPaymentReceipts !== false);
+    setEnableAutomaticInvoicing(!!initialData.enableAutomaticInvoicing);
+    if (initialData.paymentMethods && typeof initialData.paymentMethods === 'object') {
+      const pm = initialData.paymentMethods as Record<string, { [key: string]: boolean }>;
+      if (pm.universal && typeof pm.universal === 'object') {
+        setEnabledUniversalPaymentMethods(prev => ({ ...prev, ...pm.universal }));
+      }
+      const { universal: _u, ...perCurrency } = pm;
+      // Restore payment method toggles for all currencies (merge so disabled currencies keep their last-saved methods)
+      const allCurrencyCodes = ['USD', 'EUR', 'GBP', 'INR'];
+      const merged: Record<string, { [key: string]: boolean }> = {};
+      allCurrencyCodes.forEach(code => {
+        if (perCurrency[code] && typeof perCurrency[code] === 'object') {
+          merged[code] = { ...(paymentMethodsByCurrency[code] || {}), ...perCurrency[code] };
+        } else if (paymentMethodsByCurrency[code]) {
+          merged[code] = { ...paymentMethodsByCurrency[code] };
+        }
+      });
+      if (Object.keys(merged).length > 0) {
+        setEnabledPaymentMethods(prev => ({ ...prev, ...merged }));
+      }
+    }
+  }, [initialData]);
+
+  const getPaymentDetails = React.useCallback((): PaymentDetailsPayload => {
+    const toNum = (v: string) => Math.max(0, parseFloat(v) || 0);
+    const listedPrice = {
+      INR: currencySpecificPricingEnabled ? toNum(currencyListPrices.INR) : (globalPricingEnabled ? toNum(globalListPrice) : 0),
+      USD: currencySpecificPricingEnabled ? toNum(currencyListPrices.USD) : (globalPricingEnabled ? toNum(globalListPrice) : 0),
+      EUR: currencySpecificPricingEnabled ? toNum(currencyListPrices.EUR) : (globalPricingEnabled ? toNum(globalListPrice) : 0),
+      GBP: currencySpecificPricingEnabled ? toNum(currencyListPrices.GBP) : (globalPricingEnabled ? toNum(globalListPrice) : 0)
+    };
+    const sellingPrice = {
+      INR: currencySpecificPricingEnabled ? toNum(currencyActualPrices.INR) : (globalPricingEnabled ? toNum(globalActualPrice) : 0),
+      USD: currencySpecificPricingEnabled ? toNum(currencyActualPrices.USD) : (globalPricingEnabled ? toNum(globalActualPrice) : 0),
+      EUR: currencySpecificPricingEnabled ? toNum(currencyActualPrices.EUR) : (globalPricingEnabled ? toNum(globalActualPrice) : 0),
+      GBP: currencySpecificPricingEnabled ? toNum(currencyActualPrices.GBP) : (globalPricingEnabled ? toNum(globalActualPrice) : 0)
+    };
+    if (globalPricingEnabled && !currencySpecificPricingEnabled) {
+      const g = toNum(globalListPrice);
+      const s = toNum(globalActualPrice);
+      listedPrice.INR = g; listedPrice.USD = g; listedPrice.EUR = g; listedPrice.GBP = g;
+      sellingPrice.INR = s; sellingPrice.USD = s; sellingPrice.EUR = s; sellingPrice.GBP = s;
+    }
+    return {
+      listedPrice,
+      sellingPrice,
+      globalPricingEnabled,
+      currencySpecificPricingEnabled,
+      enabledCurrencies: { ...enabledCurrencies },
+      installmentsOn: emiEnabled,
+      installmentPeriod,
+      numberOfInstallments,
+      bufferTime,
+      paymentMethods: {
+        universal: { ...enabledUniversalPaymentMethods },
+        ...enabledPaymentMethods
+      },
+      requirePaymentBeforeAccess,
+      sendPaymentReceipts,
+      enableAutomaticInvoicing
+    };
+  }, [
+    currencySpecificPricingEnabled, currencyListPrices, currencyActualPrices, globalPricingEnabled, globalListPrice, globalActualPrice,
+    enabledCurrencies,
+    emiEnabled, installmentPeriod, numberOfInstallments, bufferTime,
+    enabledUniversalPaymentMethods, enabledPaymentMethods,
+    requirePaymentBeforeAccess, sendPaymentReceipts, enableAutomaticInvoicing
+  ]);
+
+  React.useImperativeHandle(paymentDetailsRef, () => ({
+    getPaymentDetails
+  }), [getPaymentDetails]);
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -775,15 +917,42 @@ const PaymentDetailsStep: React.FC<PaymentDetailsStepProps> = React.memo(() => {
                   </Typography>
                   <Stack spacing={2}>
                     <FormControlLabel
-                      control={<Switch defaultChecked />}
+                      control={
+                        <Switch
+                          checked={enableAutomaticInvoicing}
+                          onChange={(e) => setEnableAutomaticInvoicing(e.target.checked)}
+                          sx={{
+                            '& .MuiSwitch-switchBase.Mui-checked': { color: '#6C63FF' },
+                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#6C63FF' }
+                          }}
+                        />
+                      }
                       label="Enable automatic invoicing"
                     />
                     <FormControlLabel
-                      control={<Switch />}
+                      control={
+                        <Switch
+                          checked={requirePaymentBeforeAccess}
+                          onChange={(e) => setRequirePaymentBeforeAccess(e.target.checked)}
+                          sx={{
+                            '& .MuiSwitch-switchBase.Mui-checked': { color: '#6C63FF' },
+                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#6C63FF' }
+                          }}
+                        />
+                      }
                       label="Require payment before access"
                     />
                     <FormControlLabel
-                      control={<Switch defaultChecked />}
+                      control={
+                        <Switch
+                          checked={sendPaymentReceipts}
+                          onChange={(e) => setSendPaymentReceipts(e.target.checked)}
+                          sx={{
+                            '& .MuiSwitch-switchBase.Mui-checked': { color: '#6C63FF' },
+                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#6C63FF' }
+                          }}
+                        />
+                      }
                       label="Send payment receipts"
                     />
                   </Stack>

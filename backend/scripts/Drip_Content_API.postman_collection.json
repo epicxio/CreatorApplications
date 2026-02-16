@@ -1,0 +1,252 @@
+{
+	"info": {
+		"_postman_id": "drip-content-api-collection",
+		"name": "Drip Content API - Course Management",
+		"description": "API endpoints to check drip content settings for courses",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get Course by ObjectId",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/courses/{{courseObjectId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"courses",
+						"{{courseObjectId}}"
+					]
+				},
+				"description": "Get a course by MongoDB ObjectId. Returns full course object including all drip content settings."
+			},
+			"response": []
+		},
+		{
+			"name": "Get Course by Formatted Course ID",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/courses/{{courseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"courses",
+						"{{courseId}}"
+					]
+				},
+				"description": "Get a course by formatted course ID (e.g., C-ADM-0001). Returns full course object including all drip content settings."
+			},
+			"response": []
+		},
+		{
+			"name": "Get My Courses",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/courses/my-courses?status=Draft&page=1&limit=10",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"courses",
+						"my-courses"
+					],
+					"query": [
+						{
+							"key": "status",
+							"value": "Draft",
+							"description": "Filter by status (Draft, Published, etc.)"
+						},
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number"
+						},
+						{
+							"key": "limit",
+							"value": "10",
+							"description": "Items per page"
+						}
+					]
+				},
+				"description": "Get all courses for the current authenticated instructor. Returns array of courses with drip content fields."
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Courses (Filter by Drip Enabled)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/courses?dripEnabled=true&page=1&limit=10",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"courses"
+					],
+					"query": [
+						{
+							"key": "dripEnabled",
+							"value": "true",
+							"description": "Filter courses with drip content enabled"
+						},
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number"
+						},
+						{
+							"key": "limit",
+							"value": "10",
+							"description": "Items per page"
+						}
+					]
+				},
+				"description": "Get all courses filtered by drip content enabled status."
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Courses (All Filters)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/courses?page=1&limit=10&category=Business&level=Beginner&status=Draft&dripEnabled=true",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"courses"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number"
+						},
+						{
+							"key": "limit",
+							"value": "10",
+							"description": "Items per page"
+						},
+						{
+							"key": "category",
+							"value": "Business",
+							"description": "Filter by category"
+						},
+						{
+							"key": "level",
+							"value": "Beginner",
+							"description": "Filter by level"
+						},
+						{
+							"key": "status",
+							"value": "Draft",
+							"description": "Filter by status"
+						},
+						{
+							"key": "dripEnabled",
+							"value": "true",
+							"description": "Filter by drip content enabled"
+						}
+					]
+				},
+				"description": "Get all courses with multiple filters applied."
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "YOUR_TOKEN_HERE",
+			"type": "string"
+		},
+		{
+			"key": "courseObjectId",
+			"value": "6919c01a6ade86f72f2fa20a",
+			"type": "string"
+		},
+		{
+			"key": "courseId",
+			"value": "C-ADM-0001",
+			"type": "string"
+		}
+	]
+}
+

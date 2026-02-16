@@ -25,7 +25,6 @@ import {
   Quiz as QuizIcon,
   Assignment as AssignmentIcon,
   LiveTv as LiveIcon,
-  AccessTime as TimeIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { Module, Lesson } from '../../types/course';
@@ -34,7 +33,7 @@ interface CurriculumAccordionProps {
   modules: Module[];
   completedLessons: string[];
   currentLessonId?: string;
-  onLessonClick: (lesson: Lesson) => void;
+  onLessonClick: (_lesson: Lesson) => void;
   isEnrolled: boolean;
 }
 
@@ -141,7 +140,7 @@ const CurriculumAccordion: React.FC<CurriculumAccordionProps> = ({
       {modules.map((module, moduleIndex) => {
         const isExpanded = expandedModules.has(module.id);
         const moduleProgress = getModuleProgress(module);
-        const hasUnlockedLessons = module.lessons.some(lesson => lesson.isUnlocked);
+        const _hasUnlockedLessons = module.lessons.some(lesson => lesson.isUnlocked);
 
         return (
           <motion.div

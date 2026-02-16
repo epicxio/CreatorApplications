@@ -27,8 +27,6 @@ import {
   StarOutline,
   AnalyticsOutlined,
   DashboardOutlined,
-  LockOpenOutlined,
-  HistoryOutlined,
   GroupWorkOutlined,
   VerifiedUserOutlined,
   Notifications as NotificationsIcon,

@@ -2,6 +2,7 @@
 
 export interface Course {
   id: string;
+  courseId?: string; // Formatted course ID like "C-ADM-0001"
   name: string;
   subtitle?: string;
   description: string;
@@ -22,11 +23,80 @@ export interface Course {
   duration: number; // in minutes
   modules: Module[];
   certificateEnabled: boolean;
+  certificateTemplate?: string;
+  /** URL of certificate template PDF (creator upload); used when issuing learner certificates */
+  certificateTemplatePdfUrl?: string;
+  certificateTitle?: string;
+  certificateDescription?: string;
+  certificateCompletionPercentage?: number;
+  certificateApplicationLogoEnabled?: boolean;
+  certificateApplicationLogo?: string;
+  certificateSignatures?: Array<{
+    _id?: string;
+    name: string;
+    designation: string;
+    type: 'upload' | 'draw';
+    image?: string;
+    enabled?: boolean;
+    isDefault?: boolean;
+  }>;
+  certificateCreatorLogo?: string;
   dripEnabled: boolean;
+  dripMethods?: Array<{
+    moduleId: string;
+    method: 'immediate' | 'days' | 'date';
+    action?: string | number;
+    unlockDate?: string;
+  }>;
+  dripDisplayOption?: 'title' | 'titleAndLessons' | 'hide';
+  dripHideUnlockDate?: boolean;
+  dripSendCommunication?: boolean;
   listedPrice: { [currency: string]: number };
   sellingPrice: { [currency: string]: number };
   enrollments: number;
   completionRate: number;
+  /** Creator-configured payment methods: { universal: { [method]: boolean }, USD: { ... }, INR: { ... } } */
+  paymentMethods?: Record<string, { [key: string]: boolean }>;
+  /** Which currencies are enabled for payments: { INR: true, USD: false, ... } */
+  enabledCurrencies?: { [key: string]: boolean };
+  requirePaymentBeforeAccess?: boolean;
+  sendPaymentReceipts?: boolean;
+  enableAutomaticInvoicing?: boolean;
+  globalPricingEnabled?: boolean;
+  currencySpecificPricingEnabled?: boolean;
+  installmentsOn?: boolean;
+  installmentPeriod?: number;
+  numberOfInstallments?: number;
+  bufferTime?: number;
+  /** Step 5 Additional Details: course FAQs (creator-defined, shown to learners) */
+  faqs?: Array<{ question: string; answer: string }>;
+  affiliateActive?: boolean;
+  affiliateRewardPercentage?: number;
+  /** Course configuration (collections): when true, application watermark is removed from curriculum videos/documents. */
+  watermarkRemovalEnabled?: boolean;
+  /** Publish history: version, date/time, and snapshot of what was saved (for display and diff). */
+  publishHistory?: Array<{
+    version: number;
+    publishedAt: string;
+    snapshot?: PublishSnapshot;
+  }>;
+}
+
+/** Snapshot of course state at publish time (for version history and diff). */
+export interface PublishSnapshot {
+  details?: { name: string; subtitle: string; description: string; category: string; level: string; language: string };
+  curriculum?: { moduleCount: number; modules: Array<{ title: string; lessonCount: number }> };
+  drip?: { dripEnabled: boolean; dripMethodCount: number; dripDisplayOption: string };
+  certificate?: { certificateEnabled: boolean; certificateTitle: string };
+  payment?: {
+    listedPriceINR: number; listedPriceUSD: number;
+    sellingPriceINR: number; sellingPriceUSD: number;
+    installmentsOn: boolean;
+  };
+  additional?: {
+    affiliateActive: boolean; affiliateRewardPercentage: number;
+    watermarkRemovalEnabled: boolean; faqsCount: number;
+  };
 }
 
 export interface Module {
@@ -127,6 +197,9 @@ export interface Progress {
   completedAt?: string;
   certificateEarned?: boolean;
   certificateUrl?: string;
+  certificateIssuedAt?: string;
+  /** When the user first reached the certificate completion % (for display on certificate as "Completed on") */
+  certificateEarnedAt?: string;
 }
 
 export interface Comment {
@@ -259,6 +332,59 @@ export interface EnrollmentResponse {
     courseId: string;
     userId: string;
     enrolledAt: string;
+  };
+  message?: string;
+}
+
+export interface CheckoutResponse {
+  success: boolean;
+  data: {
+    orderId: string;
+    courseId: string;
+    userId: string;
+    enrolledAt: string;
+    alreadyEnrolled?: boolean;
+  };
+  message?: string;
+}
+
+/** Single affiliate code (creator view: list by course; affiliate view: my codes) */
+export interface AffiliateCodeItem {
+  affiliateCodeId: string;
+  code: string;
+  link: string;
+  displayName?: string;
+  status: 'active' | 'paused';
+  clicks: number;
+  conversions: number;
+  earningsByCurrency: { [currency: string]: number };
+  /** Creator view only */
+  affiliateUserId?: string;
+  affiliateName?: string;
+  affiliateEmail?: string;
+  createdAt?: string;
+  /** My codes view only */
+  courseId?: string;
+  courseName?: string;
+  courseCourseId?: string;
+  affiliateRewardPercentage?: number;
+}
+
+export interface AffiliateCodesResponse {
+  success: boolean;
+  data: AffiliateCodeItem[];
+  message?: string;
+}
+
+export interface CreateAffiliateCodeResponse {
+  success: boolean;
+  data: {
+    affiliateCodeId: string;
+    code: string;
+    link: string;
+    displayName?: string;
+    conversions: number;
+    earningsByCurrency: { [currency: string]: number };
   };
   message?: string;
 }

@@ -3,19 +3,13 @@ import {
   Box, 
   Grid, 
   Card, 
-  CardContent, 
   Typography, 
   Avatar, 
   Chip, 
-  Divider, 
-  Tooltip, 
   Tabs, 
   Tab, 
-  IconButton,
   LinearProgress,
   CircularProgress,
-  Badge,
-  Paper,
   styled,
   Fade,
   Zoom,
@@ -25,78 +19,41 @@ import {
   Instagram, 
   Facebook, 
   YouTube, 
-  Language, 
-  LocationOn, 
-  Male, 
-  Female, 
-  EmojiEvents, 
-  TrendingUp, 
-  BarChart, 
-  AccessTime, 
-  Tag, 
-  Public, 
-  Group, 
-  InsertChart, 
-  Favorite, 
-  Comment, 
-  Share, 
-  Visibility,
+  LocationOn,
+  TrendingUp,
+  AccessTime,
+  Tag,
+  Favorite,
+  Comment,
+  Share,
   Analytics,
   People,
   ContentPaste,
   Campaign,
   Timeline,
-  TrendingDown,
-  Speed,
-  Psychology,
   Business,
   ShoppingCart,
-  LocalOffer,
-  Schedule,
   Language as LanguageIcon,
   Flag,
   Cake,
-  Work,
-  School,
-  FitnessCenter,
-  Flight,
-  AttachMoney,
-  FamilyRestroom,
   Category,
   AutoGraph,
-  DataUsage,
-  Insights,
-  Assessment,
-  PieChart as PieChartIcon,
-  ShowChart,
-  BubbleChart,
-  ScatterPlot,
   Timeline as TimelineIcon,
-  TrendingFlat,
   TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Star,
-  StarBorder,
-  StarHalf,
-  CheckCircle,
-  Warning,
-  Error,
-  Info
+  Star
 } from '@mui/icons-material';
 import { 
   PieChart, 
   Pie, 
   Cell, 
   BarChart as ReBarChart, 
-  Bar, 
+  Bar,
   XAxis, 
   YAxis, 
   Tooltip as ReTooltip, 
   ResponsiveContainer,
   LineChart,
   Line,
-  AreaChart,
-  Area,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
@@ -445,6 +402,7 @@ const COLORS = [
   '#EC4899'  // Pink
 ];
 
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StyledCard = styled(Card)(({ theme }) => ({
   background: 'rgba(255, 255, 255, 0.95)',
   backdropFilter: 'blur(10px)',
@@ -458,6 +416,7 @@ const StyledCard = styled(Card)(({ theme }) => ({
   },
 }));
 
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const ChartContainer = styled(Box)(({ theme }) => ({
   position: 'relative',
   '& .recharts-pie': {
@@ -517,7 +476,6 @@ const CreatorProfile: React.FC = () => {
     setTimeout(() => {
       setLoading(false);
       // In a real app, you would fetch creator data here using the ID
-      console.log('Loading creator profile for ID:', id);
     }, 1000);
   }, [id]);
 
@@ -652,7 +610,7 @@ const CreatorProfile: React.FC = () => {
                         Content Categories
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-                        {creatorData.categories.subcategories[creatorData.categories.primary as keyof typeof creatorData.categories.subcategories]?.map((cat: string, index: number) => (
+                        {creatorData.categories.subcategories[creatorData.categories.primary as keyof typeof creatorData.categories.subcategories]?.map((cat: string, _index: number) => (
                           <Chip key={cat} label={cat} color="primary" variant="outlined" />
                         ))}
                       </Box>
@@ -750,7 +708,7 @@ const CreatorProfile: React.FC = () => {
                       Products They Can Promote
                     </Typography>
                     <Grid container spacing={2}>
-                      {creatorData.promotableProducts.map((category, index) => (
+                      {creatorData.promotableProducts.map((category, _index) => (
                         <Grid item xs={12} sm={6} md={4} key={category.category}>
                           <Card sx={{ p: 2, height: '100%' }}>
                             <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -799,8 +757,8 @@ const CreatorProfile: React.FC = () => {
                              dataKey="percent"
                              paddingAngle={2}
                            >
-                             {creatorData.audienceGender.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={entry.color} />
+                             {creatorData.audienceGender.map((entry, _index) => (
+                               <Cell key={`cell-${_index}`} fill={entry.color} />
                              ))}
                            </Pie>
                            <ReTooltip 
@@ -832,7 +790,7 @@ const CreatorProfile: React.FC = () => {
                      </ChartContainer>
                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
-                         {creatorData.audienceGender.map((entry, index) => (
+                         {creatorData.audienceGender.map((entry, _index) => (
                            <Box key={entry.gender} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                              <Box sx={{ 
                                width: 12, 
@@ -931,7 +889,7 @@ const CreatorProfile: React.FC = () => {
                       Top Performing Content
                     </Typography>
                     <Grid container spacing={2}>
-                      {creatorData.topContent.map((content, index) => (
+                      {creatorData.topContent.map((content, _index) => (
                         <Grid item xs={12} md={4} key={content.id}>
                           <Card sx={{ p: 2, height: '100%' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Grid, Card, CardContent, Button, Avatar, Chip, Accordion, AccordionSummary, AccordionDetails, useTheme } from '@mui/material';
+import { Box, Typography, Grid, Card, Button, Avatar, Chip, Accordion, AccordionSummary, AccordionDetails, useTheme, Alert } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -14,6 +14,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CategoryIcon from '@mui/icons-material/Category';
 import LabelIcon from '@mui/icons-material/Label';
 import { User as BaseUser } from '../services/userService';
@@ -401,6 +402,7 @@ const learnerFeatureHighlights = [
 
 const GetToKnow: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { user: rawUser } = useAuth();
   const user = rawUser as User;
 
@@ -431,7 +433,7 @@ const GetToKnow: React.FC = () => {
 
   // Helper: Map user categories to full objects
   const mappedCategories = (user?.categories || []).map(
-    (cat: { mainCategoryId: string; subCategoryIds: string[]; _id?: string }, idx: number) => {
+    (cat: { mainCategoryId: string; subCategoryIds: string[]; _id?: string }, _idx: number) => {
       const main = allCategories.find((c: any) => c._id === cat.mainCategoryId || c.id === cat.mainCategoryId);
       if (!main) return null;
       const subcats = (cat.subCategoryIds || []).map((subId: string) => main.subcategories.find((s: any) => s._id === subId || s.id === subId)).filter(Boolean);
@@ -466,8 +468,8 @@ const GetToKnow: React.FC = () => {
         </Typography>
         <Typography variant="h6" color="secondary" sx={{ mb: 4, fontWeight: 500 }}>
           {isLearner 
-            ? 'Access thousands of courses, connect with fellow learners, and track your progress with <b>personalized learning paths</b>.'
-            : 'Unlike generic social platforms, we give you <b>full control</b> over your content, your audience, and your earnings.'
+            ? 'Access thousands of courses, connect with fellow learners, and track your progress with personalized learning paths.'
+            : 'Unlike generic social platforms, we give you full control over your content, your audience, and your earnings.'
           }
         </Typography>
       </motion.div>
@@ -501,6 +503,38 @@ const GetToKnow: React.FC = () => {
           ))}
         </Grid>
       </motion.div>
+
+      {/* Creator: KYC & Notifications reminder (below Platform Map) */}
+      {isCreator && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          style={{ marginBottom: 48 }}
+        >
+          <Alert
+            severity="info"
+            sx={{
+              borderRadius: 2,
+              alignItems: 'center',
+              '& .MuiAlert-message': { width: '100%' },
+            }}
+            action={
+              <Button color="primary" variant="contained" size="small" onClick={() => navigate('/kyc')}>
+                Upload KYC
+              </Button>
+            }
+          >
+            <Typography variant="body1" fontWeight={600}>
+              You have to upload the KYC and check all other notifications to proceed.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Complete your KYC verification and review any pending notifications from the bell icon above.
+            </Typography>
+          </Alert>
+        </motion.div>
+      )}
 
       {/* What Can You Do Section */}
       <motion.div
@@ -593,7 +627,7 @@ const GetToKnow: React.FC = () => {
           </Box>
         ) : (
           <Grid container spacing={3} justifyContent="center">
-            {mappedCategories.map((cat, idx) => (
+            {mappedCategories.map((cat, _idx) => (
               <Grid item xs={12} sm={6} md={4} key={cat._id || cat.id}>
                 <Card sx={{ borderRadius: 4, boxShadow: 4, p: 3, background: 'linear-gradient(120deg, #6C63FF11 0%, #fff 100%)', minHeight: 180 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -661,7 +695,7 @@ const GetToKnow: React.FC = () => {
             <Typography variant="h4" fontWeight={800} sx={{ mb: 3 }}>
               FAQs
             </Typography>
-            {faqs.map((faq, idx) => (
+            {faqs.map((faq, _idx) => (
               <Accordion key={faq.q} TransitionProps={{ unmountOnExit: true }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography fontWeight={700}>{faq.q}</Typography>

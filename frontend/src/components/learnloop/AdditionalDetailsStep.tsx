@@ -13,8 +13,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Chip,
-  FormControlLabel
+  Chip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -22,14 +21,33 @@ import {
   ExpandMore as ExpandMoreIcon,
   MonetizationOn as MonetizationOnIcon,
   QuestionAnswer as QuestionAnswerIcon,
-  WaterDrop as WaterDropIcon,
-  VideoLibrary as VideoLibraryIcon
+  WaterDrop as WaterDropIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
+/** Payload returned by getAdditionalDetails for draft save / Save Additional Settings */
+export interface AdditionalDetailsPayload {
+  faqs: Array<{ question: string; answer: string }>;
+  affiliateActive: boolean;
+  affiliateRewardPercentage: number;
+  watermarkRemovalEnabled: boolean;
+}
+
+export interface AdditionalDetailsStepRef {
+  getAdditionalDetails: () => AdditionalDetailsPayload;
+}
+
+export interface AdditionalDetailsInitialData {
+  faqs?: Array<{ question: string; answer: string }>;
+  affiliateRewardEnabled?: boolean;
+  affiliateRewardPercentage?: string;
+  watermarkRemovalEnabled?: boolean;
+}
+
 interface AdditionalDetailsStepProps {
-  // Add props as needed for additional details configuration
   lastSaved?: Date | null;
+  initialData?: AdditionalDetailsInitialData | null;
+  additionalDetailsRef?: React.RefObject<AdditionalDetailsStepRef | null>;
 }
 
 interface FAQ {
@@ -38,9 +56,7 @@ interface FAQ {
   answer: string;
 }
 
-const AdditionalDetailsStep: React.FC<AdditionalDetailsStepProps> = React.memo(({ lastSaved }) => {
-  console.log('AdditionalDetailsStep rendered');
-  
+const AdditionalDetailsStep: React.FC<AdditionalDetailsStepProps> = React.memo(({ lastSaved: _lastSaved, initialData, additionalDetailsRef }) => {
   // Affiliate Reward State
   const [affiliateRewardEnabled, setAffiliateRewardEnabled] = React.useState(false);
   const [affiliateRewardPercentage, setAffiliateRewardPercentage] = React.useState('10');
@@ -48,10 +64,39 @@ const AdditionalDetailsStep: React.FC<AdditionalDetailsStepProps> = React.memo((
   // Watermark Removal State
   const [watermarkRemovalEnabled, setWatermarkRemovalEnabled] = React.useState(false);
 
-  // FAQ State
+  // FAQ State (local ids for list keys; payload strips to question/answer only)
   const [faqs, setFaqs] = React.useState<FAQ[]>([
     { id: 1, question: '', answer: '' }
   ]);
+
+  // Hydrate from parent when loading existing course (avoid overwriting user's toggle with stale false after save)
+  React.useEffect(() => {
+    if (!initialData) return;
+    if (initialData.affiliateRewardEnabled !== undefined) {
+      setAffiliateRewardEnabled((prev) => {
+        if (initialData!.affiliateRewardEnabled === true) return true;
+        if (initialData!.affiliateRewardEnabled === false && prev === true) return prev;
+        return !!initialData!.affiliateRewardEnabled;
+      });
+    }
+    if (initialData.affiliateRewardPercentage !== undefined && initialData.affiliateRewardPercentage !== '') {
+      setAffiliateRewardPercentage(String(initialData.affiliateRewardPercentage));
+    }
+    if (initialData.watermarkRemovalEnabled !== undefined) {
+      setWatermarkRemovalEnabled(initialData.watermarkRemovalEnabled);
+    }
+    if (initialData.faqs && Array.isArray(initialData.faqs)) {
+      if (initialData.faqs.length === 0) {
+        setFaqs([{ id: 1, question: '', answer: '' }]);
+      } else {
+        setFaqs(initialData.faqs.map((item, index) => ({
+          id: index + 1,
+          question: item.question || '',
+          answer: item.answer || ''
+        })));
+      }
+    }
+  }, [initialData]);
 
   const handleAddFAQ = () => {
     if (faqs.length < 10) {
@@ -71,6 +116,23 @@ const AdditionalDetailsStep: React.FC<AdditionalDetailsStepProps> = React.memo((
       faq.id === id ? { ...faq, [field]: value } : faq
     ));
   };
+
+  const getAdditionalDetails = React.useCallback((): AdditionalDetailsPayload => {
+    const pct = Math.max(0, Math.min(100, parseFloat(affiliateRewardPercentage) || 0));
+    const faqsPayload = faqs
+      .filter(f => (f.question || '').trim() !== '' && (f.answer || '').trim() !== '')
+      .map(f => ({ question: f.question.trim(), answer: f.answer.trim() }));
+    return {
+      faqs: faqsPayload,
+      affiliateActive: affiliateRewardEnabled,
+      affiliateRewardPercentage: pct,
+      watermarkRemovalEnabled
+    };
+  }, [faqs, affiliateRewardEnabled, affiliateRewardPercentage, watermarkRemovalEnabled]);
+
+  React.useImperativeHandle(additionalDetailsRef, () => ({
+    getAdditionalDetails
+  }), [getAdditionalDetails]);
 
   return (
     <Box sx={{ 

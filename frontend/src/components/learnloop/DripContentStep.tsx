@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
@@ -11,61 +11,59 @@ import {
   Stack,
   Card,
   CardContent,
-  Button,
   Chip,
-  IconButton,
-  Tooltip,
   Grid,
-  Paper,
-  Divider,
-  LinearProgress
+  Paper
 } from '@mui/material';
 import {
   Timeline as TimelineIcon,
   Schedule as ScheduleIcon,
   CalendarToday as CalendarIcon,
-  Lock as LockIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Email as EmailIcon,
-  PlayArrow as PlayArrowIcon,
   Info as InfoIcon,
-  TrendingUp as TrendingUpIcon,
-  AccessTime as AccessTimeIcon,
-  Event as EventIcon
+  TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
-interface DripMethod {
+export interface DripMethod {
   id: string;
   method: 'immediate' | 'days' | 'date';
   action?: string | number;
 }
 
-const DripContentStep: React.FC = React.memo(() => {
-  // Drip Content state
-  const [dripEnabled, setDripEnabled] = useState(false);
-  const [dripMethods, setDripMethods] = useState<DripMethod[]>([
-    {
-      id: 'Introduction',
-      method: 'immediate',
-      action: undefined
-    },
-    {
-      id: 'Core Concepts',
-      method: 'days',
-      action: 7
-    },
-    {
-      id: 'Advanced Topics',
-      method: 'date',
-      action: ''
-    }
-  ]);
-  const [displayOption, setDisplayOption] = useState<'title' | 'titleAndLessons' | 'hide'>('titleAndLessons');
-  const [hideUnlockDate, setHideUnlockDate] = useState(false);
-  const [sendCommunication, setSendCommunication] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>('');
+interface DripContentStepProps {
+  dripEnabled: boolean;
+  onDripEnabledChange: (_enabled: boolean) => void;
+  dripMethods: DripMethod[];
+  onDripMethodsChange: (_methods: DripMethod[]) => void;
+  displayOption: 'title' | 'titleAndLessons' | 'hide';
+  onDisplayOptionChange: (_option: 'title' | 'titleAndLessons' | 'hide') => void;
+  hideUnlockDate: boolean;
+  onHideUnlockDateChange: (_hide: boolean) => void;
+  sendCommunication: boolean;
+  onSendCommunicationChange: (_send: boolean) => void;
+  modules: Array<{
+    id: string;
+    title: string;
+    description?: string;
+  }>;
+}
+
+const DripContentStep: React.FC<DripContentStepProps> = React.memo(({
+  dripEnabled,
+  onDripEnabledChange,
+  dripMethods,
+  onDripMethodsChange,
+  displayOption,
+  onDisplayOptionChange,
+  hideUnlockDate,
+  onHideUnlockDateChange,
+  sendCommunication,
+  onSendCommunicationChange,
+  modules
+}) => {
 
   // Memoize expensive computations
   const methodIcons = React.useMemo(() => ({
@@ -88,15 +86,15 @@ const DripContentStep: React.FC = React.memo(() => {
         ? { ...m, method, action: method === 'immediate' ? undefined : method === 'days' ? 1 : '' }
         : m
     );
-    setDripMethods(updatedMethods);
-  }, [dripMethods]);
+    onDripMethodsChange(updatedMethods);
+  }, [dripMethods, onDripMethodsChange]);
 
   const handleActionChange = React.useCallback((moduleId: string, action: string | number) => {
     const updatedMethods = dripMethods.map(m => 
       m.id === moduleId ? { ...m, action } : m
     );
-    setDripMethods(updatedMethods);
-  }, [dripMethods]);
+    onDripMethodsChange(updatedMethods);
+  }, [dripMethods, onDripMethodsChange]);
 
   const getMethodIcon = React.useCallback((method: string) => {
     return methodIcons[method as keyof typeof methodIcons] || methodIcons.default;
@@ -187,7 +185,7 @@ const DripContentStep: React.FC = React.memo(() => {
               <Box sx={{ textAlign: 'center' }}>
                 <Switch
                   checked={dripEnabled}
-                  onChange={(e) => setDripEnabled(e.target.checked)}
+                  onChange={(e) => onDripEnabledChange(e.target.checked)}
                   sx={{
                     '& .MuiSwitch-switchBase.Mui-checked': {
                       color: '#00FFC6',
@@ -249,7 +247,7 @@ const DripContentStep: React.FC = React.memo(() => {
                                 {getMethodIcon(dripMethod.method)}
                               </Box>
                               <Typography variant="subtitle1" fontWeight={600}>
-                                Module {index + 1}: {dripMethod.id}
+                                {modules.find(m => m.id === dripMethod.id)?.title || `Module ${index + 1}`}
                               </Typography>
                             </Stack>
 
@@ -364,7 +362,7 @@ const DripContentStep: React.FC = React.memo(() => {
                       whileTap={{ scale: 0.98 }}
                     >
                       <Paper
-                        onClick={() => setDisplayOption(option.value as any)}
+                        onClick={() => onDisplayOptionChange(option.value as 'title' | 'titleAndLessons' | 'hide')}
                         sx={{
                           p: 3,
                           borderRadius: 3,
@@ -437,7 +435,7 @@ const DripContentStep: React.FC = React.memo(() => {
                     </Box>
                     <Switch
                       checked={hideUnlockDate}
-                                                      onChange={(e) => setHideUnlockDate(e.target.checked)}
+                      onChange={(e) => onHideUnlockDateChange(e.target.checked)}
                       sx={{
                         '& .MuiSwitch-switchBase.Mui-checked': {
                           color: '#FF6B6B',
@@ -476,7 +474,7 @@ const DripContentStep: React.FC = React.memo(() => {
                     </Box>
                     <Switch
                       checked={sendCommunication}
-                                                      onChange={(e) => setSendCommunication(e.target.checked)}
+                      onChange={(e) => onSendCommunicationChange(e.target.checked)}
                       sx={{
                         '& .MuiSwitch-switchBase.Mui-checked': {
                           color: '#00FFC6',

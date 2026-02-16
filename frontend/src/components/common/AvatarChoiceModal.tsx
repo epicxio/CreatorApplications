@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, PhotoLibrary, CameraAlt, CloudUpload } from '@mui/icons-material';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StyledDialog = styled(Dialog)(({ theme }) => ({
   '& .MuiDialog-paper': {
     backgroundColor: 'rgba(30, 30, 30, 0.9)',

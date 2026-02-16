@@ -1,9 +1,9 @@
-import { Box, Typography, Container, Grid, Card, CardContent, styled, keyframes } from '@mui/material';
+import { Typography, Container, Grid, CardContent, styled, keyframes } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { School, VideoLibrary, Group, EmojiEvents, Chat, CalendarToday } from '@mui/icons-material';
 
-const shimmer = keyframes`
+const _shimmer = keyframes`
   0% { background-position: -1000px 0; }
   100% { background-position: 1000px 0; }
 `;

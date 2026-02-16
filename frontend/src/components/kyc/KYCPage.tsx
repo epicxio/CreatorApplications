@@ -18,20 +18,18 @@ import {
   DialogActions,
   Stepper,
   Step,
+  StepButton,
   StepLabel,
   StepContent,
   Divider,
   Avatar,
   List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemSecondaryAction,
   Tooltip,
   LinearProgress,
   styled,
   alpha,
 } from '@mui/material';
+import api from '../../services/api';
 import {
   CloudUpload as CloudUploadIcon,
   Edit as EditIcon,
@@ -43,14 +41,7 @@ import {
   CreditCard as CreditCardIcon,
   Badge as BadgeIcon,
   Description as DescriptionIcon,
-  Security as SecurityIcon,
-  ArrowForward as ArrowForwardIcon,
-  ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon,
-  Download as DownloadIcon,
-  PhotoCamera as PhotoCameraIcon,
-  FileCopy as FileCopyIcon,
 } from '@mui/icons-material';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -88,6 +79,8 @@ const DocumentCard = styled(Card)(({ theme }) => ({
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
   },
 }));
+
+const getKycApiBase = () => api.defaults.baseURL || `${window.location.origin}/api`;
 
 interface KYCDocument {
   id: string;
@@ -127,7 +120,6 @@ const KYCPage: React.FC = () => {
     aadharCard: { number: '', file: null },
     otherDocuments: [],
   });
-  const [editMode, setEditMode] = useState<string | null>(null);
   const [previewDialog, setPreviewDialog] = useState<{ open: boolean; document: KYCDocument | null }>({
     open: false,
     document: null,
@@ -247,7 +239,8 @@ const KYCPage: React.FC = () => {
     setLoadError(null);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/kyc/profile', {
+      const baseUrl = getKycApiBase();
+      const response = await fetch(`${baseUrl}/kyc/profile`, {
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
         }
@@ -261,7 +254,7 @@ const KYCPage: React.FC = () => {
         name: doc.documentName,
         number: doc.documentNumber,
         fileName: doc.fileName,
-        fileUrl: `http://localhost:5001/api/kyc/documents/${doc._id}/download`,
+        fileUrl: `${baseUrl}/kyc/documents/${doc._id}/download`,
         uploadDate: new Date(doc.createdAt),
         status: doc.status,
         remarks: doc.verificationRemarks || '',
@@ -285,85 +278,6 @@ const KYCPage: React.FC = () => {
         ...prev,
         aadharCard: { ...prev.aadharCard, file },
       }));
-    }
-  };
-
-  const handleNext = () => {
-    setActiveStep(prev => Math.min(prev + 1, visibleSteps.length - 1));
-  };
-
-  const handleBack = () => {
-    setActiveStep(prev => Math.max(prev - 1, 0));
-  };
-
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      console.log('Submitting KYC documents:', formData);
-      // PAN Card upload
-      if (formData.panCard.file) {
-        const formDataObj = new FormData();
-        formDataObj.append('documentType', 'pan_card');
-        formDataObj.append('documentName', formData.panCard.name);
-        formDataObj.append('documentNumber', formData.panCard.number);
-        formDataObj.append('document', formData.panCard.file);
-        // Add your auth token logic here if needed
-        const token = localStorage.getItem('token');
-        console.log('Uploading PAN card to backend...');
-        const response = await fetch('http://localhost:5001/api/kyc/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : ''
-          },
-          body: formDataObj
-        });
-        const result = await response.json();
-        console.log('PAN card upload response:', result);
-        if (!response.ok) throw new Error(result.message || 'Upload failed');
-        await loadKYCDocuments();
-        setFormData(prev => ({ ...prev, panCard: { name: '', number: '', file: null } }));
-        setPanUploadSuccess(true);
-        setTimeout(() => setPanUploadSuccess(false), 2000);
-        // After PAN upload, if Aadhar Card is missing or goToAadharAfterDelete is true, set the flag (navigation will happen in useEffect)
-        const updatedDocs = await (async () => {
-          const token = localStorage.getItem('token');
-          const response = await fetch('http://localhost:5001/api/kyc/profile', {
-            headers: {
-              'Authorization': token ? `Bearer ${token}` : ''
-            }
-          });
-          const result = await response.json();
-          if (!result.success) return documents;
-          return (result.data.documents || []).map((doc: any) => ({
-            id: doc._id,
-            type: doc.documentType === 'pan_card' ? 'pan' : doc.documentType === 'aadhar_card' ? 'aadhar' : 'other',
-            name: doc.documentName,
-            number: doc.documentNumber,
-            fileName: doc.fileName,
-            fileUrl: `http://localhost:5001/api/kyc/documents/${doc._id}/download`,
-            uploadDate: new Date(doc.createdAt),
-            status: doc.status,
-            remarks: doc.verificationRemarks || '',
-          }));
-        })();
-        const hasAadhar = updatedDocs.some((d: any) => d.type === 'aadhar');
-        if (goToAadharAfterDelete || !hasAadhar) {
-          setGoToAadharAfterDelete(true);
-        } else {
-          goToFirstIncompleteStep();
-        }
-      }
-      setFormData({
-        panCard: { name: '', number: '', file: null },
-        aadharCard: { number: '', file: null },
-        otherDocuments: [],
-      });
-      setActiveStep(0);
-    } catch (error: any) {
-      console.error('Error submitting KYC:', error);
-      alert('Error submitting KYC: ' + (error.message || error));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -392,19 +306,14 @@ const KYCPage: React.FC = () => {
     setPreviewDialog({ open: true, document });
     setPreviewUrl(null);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(document.fileUrl, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch document');
-      const blob = await response.blob();
+      const baseUrl = getKycApiBase();
+      const downloadUrl = `${baseUrl}/kyc/documents/${document.id}/download`;
+      const response = await api.get<Blob>(downloadUrl, { responseType: 'blob' });
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
-    } catch (error) {
+    } catch {
       setPreviewUrl('');
-      console.error('Error fetching document for preview:', error);
     }
   };
 
@@ -443,10 +352,6 @@ const KYCPage: React.FC = () => {
   };
 
   // Helper functions to check document status
-  const getDocStatus = (type: 'pan' | 'aadhar' | 'other') => {
-    const doc = documents.find(d => d.type === type);
-    return doc ? doc.status : null;
-  };
   const isDocStepDisabled = (type: 'pan' | 'aadhar' | 'other') => {
     if (type === 'other') {
       return false; // Never disable "Other Documents" step
@@ -555,7 +460,7 @@ const KYCPage: React.FC = () => {
       formDataObj.append('documentNumber', formData.panCard.number);
       formDataObj.append('document', formData.panCard.file);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/kyc/upload', {
+      const response = await fetch(`${getKycApiBase()}/kyc/upload`, {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
@@ -571,7 +476,8 @@ const KYCPage: React.FC = () => {
       // After PAN upload, if Aadhar Card is missing or goToAadharAfterDelete is true, set the flag (navigation will happen in useEffect)
       const updatedDocs = await (async () => {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5001/api/kyc/profile', {
+        const profileBase = getKycApiBase();
+        const response = await fetch(`${profileBase}/kyc/profile`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : ''
           }
@@ -584,7 +490,7 @@ const KYCPage: React.FC = () => {
           name: doc.documentName,
           number: doc.documentNumber,
           fileName: doc.fileName,
-          fileUrl: `http://localhost:5001/api/kyc/documents/${doc._id}/download`,
+          fileUrl: `${profileBase}/kyc/documents/${doc._id}/download`,
           uploadDate: new Date(doc.createdAt),
           status: doc.status,
           remarks: doc.verificationRemarks || '',
@@ -613,7 +519,7 @@ const KYCPage: React.FC = () => {
       formDataObj.append('documentNumber', formData.aadharCard.number);
       formDataObj.append('document', formData.aadharCard.file);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/kyc/upload', {
+      const response = await fetch(`${getKycApiBase()}/kyc/upload`, {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
@@ -653,7 +559,7 @@ const KYCPage: React.FC = () => {
       formDataObj.append('documentNumber', number);
       formDataObj.append('document', file);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/kyc/upload', {
+      const response = await fetch(`${getKycApiBase()}/kyc/upload`, {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
@@ -760,14 +666,31 @@ const KYCPage: React.FC = () => {
     const otherDocs = documents.filter(d => d.type === 'other');
     const maxOtherDocs = 3;
     const canUploadMore = otherDocs.length < maxOtherDocs;
+    const reviewStepIdx = visibleSteps.findIndex(s => s.label === 'Review');
+    const goToReview = () => {
+      if (reviewStepIdx !== -1) setActiveStep(reviewStepIdx);
+    };
+    const hasOtherDocs = otherDocs.length > 0;
     return (
       <Box sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 600 }}>
-          Additional Government Documents
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Upload any additional government-issued identification documents
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+          <Box>
+            <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 600 }}>
+              Additional Government Documents
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Upload any additional government-issued identification documents (optional). You can skip and come back anytime.
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={goToReview}
+            sx={{ flexShrink: 0 }}
+          >
+            {hasOtherDocs ? 'Go to Review' : 'Skip and go to Review'}
+          </Button>
+        </Box>
         {canUploadMore ? (
           <>
             <UploadArea
@@ -836,6 +759,15 @@ const KYCPage: React.FC = () => {
             Document uploaded successfully!
           </Alert>
         )}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={goToReview}
+          >
+            Continue to Review
+          </Button>
+        </Box>
       </Box>
     );
   };
@@ -930,6 +862,7 @@ const KYCPage: React.FC = () => {
     if (activeStep >= visibleSteps.length) {
       setActiveStep(visibleSteps.length - 1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only adjust when steps length changes
   }, [visibleSteps.length]);
 
   // Helper: Find first incomplete step index (final logic)
@@ -957,7 +890,7 @@ const KYCPage: React.FC = () => {
     } else {
       setActiveStep(getFirstIncompleteStepIndex());
     }
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getFirstIncompleteStepIndex is stable for this effect
   }, [documents.length, visibleSteps.length]);
 
   // Persist activeStep in localStorage
@@ -973,6 +906,7 @@ const KYCPage: React.FC = () => {
       }
       return prev;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getFirstIncompleteStepIndex is derived from documents/visibleSteps
   }, [visibleSteps.length, documents.length]);
 
   // After upload, go to first incomplete step
@@ -1047,21 +981,23 @@ const KYCPage: React.FC = () => {
         <Grid item xs={12} lg={8}>
           <Card sx={{ borderRadius: 3, overflow: 'hidden' }}>
             <CardContent sx={{ p: 0 }}>
-              <Stepper activeStep={activeStep} orientation="vertical">
+              <Stepper activeStep={activeStep} orientation="vertical" nonLinear>
                 {visibleSteps.map((step, index) => (
                   <Step key={step.label}>
-                    <StepLabel
-                      StepIconComponent={() => (
-                        <Avatar sx={{ bgcolor: activeStep === index ? 'primary.main' : 'grey.300' }}>
-                          {step.icon}
-                        </Avatar>
-                      )}
-                    >
-                      <Typography variant="h6">{step.label}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {step.description}
-                      </Typography>
-                    </StepLabel>
+                    <StepButton onClick={() => setActiveStep(index)}>
+                      <StepLabel
+                        StepIconComponent={() => (
+                          <Avatar sx={{ bgcolor: activeStep === index ? 'primary.main' : 'grey.300' }}>
+                            {step.icon}
+                          </Avatar>
+                        )}
+                      >
+                        <Typography variant="h6">{step.label}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {step.description}
+                        </Typography>
+                      </StepLabel>
+                    </StepButton>
                     <StepContent>{step.render()}</StepContent>
                   </Step>
                 ))}
@@ -1176,15 +1112,14 @@ const KYCPage: React.FC = () => {
               <Typography variant="body1" gutterBottom>
                 <strong>Upload Date:</strong> {previewDialog.document.uploadDate.toLocaleDateString()}
               </Typography>
-              <Typography variant="body1" gutterBottom>
-                <strong>Status:</strong> 
+              <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                <Typography component="span" variant="body1"><strong>Status:</strong></Typography>
                 <Chip
                   label={previewDialog.document.status}
                   color={getStatusColor(previewDialog.document.status) as any}
                   size="small"
-                  sx={{ ml: 1 }}
                 />
-              </Typography>
+              </Box>
               {previewDialog.document.status === 'rejected' && previewDialog.document.remarks && (
                 <Box sx={{ mb: 2 }}>
                   <Alert severity="error" sx={{ fontWeight: 600 }}>
@@ -1317,14 +1252,14 @@ const KYCPage: React.FC = () => {
                 <Box mt={2} textAlign="center">
                   {editDialog.previewUrl ? (
                     editDialog.file?.name.toLowerCase().endsWith('.pdf') ? (
-                      <iframe src={editDialog.previewUrl} width="100%" height="200px" style={{ border: 'none' }} />
+                      <iframe src={editDialog.previewUrl} width="100%" height="200px" style={{ border: 'none' }} title="Edit document preview" />
                     ) : (
                       <img src={editDialog.previewUrl} alt="Preview" style={{ maxWidth: 200, maxHeight: 200 }} />
                     )
                   ) : (
                     editDialog.document ? (
                       editDialog.document.fileName.toLowerCase().endsWith('.pdf') ? (
-                        <iframe src={editPreviewUrl || ''} width="100%" height="200px" style={{ border: 'none' }} />
+                        <iframe src={editPreviewUrl || ''} width="100%" height="200px" style={{ border: 'none' }} title="Edit document file preview" />
                       ) : (
                         <img src={editPreviewUrl || ''} alt="Preview" style={{ maxWidth: 200, maxHeight: 200 }} />
                       )
@@ -1366,7 +1301,7 @@ const KYCPage: React.FC = () => {
                 if (editDialog.file) formDataObj.append('document', editDialog.file);
                 const token = localStorage.getItem('token');
                 const response = await fetch(
-                  `http://localhost:5001/api/kyc/documents/${editDialog.document?.id}`,
+                  `${getKycApiBase()}/kyc/documents/${editDialog.document?.id}`,
                   {
                     method: 'PUT',
                     headers: {
@@ -1443,7 +1378,7 @@ const KYCPage: React.FC = () => {
               try {
                 const token = localStorage.getItem('token');
                 const response = await fetch(
-                  `http://localhost:5001/api/kyc/documents/${deleteDialog.document?.id}`,
+                  `${getKycApiBase()}/kyc/documents/${deleteDialog.document?.id}`,
                   {
                     method: 'DELETE',
                     headers: {

@@ -8,7 +8,6 @@ import {
   Button,
   Paper,
   Chip,
-  Divider,
   List,
   ListItem,
   ListItemIcon,
@@ -20,25 +19,16 @@ import {
   Alert,
   AlertTitle,
   Collapse,
-  IconButton,
-  Grid
+  IconButton
 } from '@mui/material';
 import {
-  CheckCircle as CheckCircleIcon,
   PlayArrow as PlayArrowIcon,
   Description as DescriptionIcon,
   Quiz as QuizIcon,
   AssignmentTurnedIn as AssignmentIcon,
   LiveTv as LiveTvIcon,
   AudioFile as AudioFileIcon,
-  MonetizationOn as MonetizationOnIcon,
-  CreditCard as CreditCardIcon,
-  Receipt as ReceiptIcon,
-  WaterDrop as WaterDropIcon,
-  QuestionAnswer as QuestionAnswerIcon,
   Visibility as VisibilityIcon,
-  Schedule as ScheduleIcon,
-  LocalOffer as LocalOfferIcon,
   Language as LanguageIcon,
   School as SchoolIcon,
   Category as CategoryIcon,
@@ -54,9 +44,325 @@ import {
   Image as ImageIcon,
   InsertDriveFile as InsertDriveFileIcon
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { courseService } from '../../services/courseService';
+import type { Course, PublishSnapshot } from '../../types/course';
+import { useToast } from '../../hooks/useToast';
+import ToastNotification from '../common/ToastNotification';
+
+/** Settings loaded from collections (API) for the four preview boxes */
+interface SettingsFromApi {
+  drip: {
+    dripEnabled: boolean;
+    dripMethods: string[];
+    dripDisplayOption: string;
+    dripHideUnlockDate: boolean;
+    dripSendCommunication: boolean;
+  };
+  certificate: {
+    certificateEnabled: boolean;
+    certificateTitle: string;
+    certificateDescription: string;
+    certificateCompletionPercentage: number;
+    certificateTemplate: string;
+  };
+  payment: {
+    listedPrice: { [currency: string]: number };
+    sellingPrice: { [currency: string]: number };
+    globalPricingEnabled: boolean;
+    currencySpecificPricingEnabled: boolean;
+    enabledCurrencies: { [key: string]: boolean };
+    installmentsOn: boolean;
+    installmentPeriod: number;
+    numberOfInstallments: number;
+    bufferTime: number;
+  };
+  additional: {
+    affiliateActive: boolean;
+    affiliateRewardPercentage: number;
+    watermarkRemovalEnabled: boolean;
+    faqs: Array<{ question: string; answer: string }>;
+  };
+  publishHistory?: Array<{ version: number; publishedAt: string; snapshot?: PublishSnapshot }>;
+}
+
+function mapCourseToSettings(course: Course): SettingsFromApi {
+  const dripMethods = (course.dripMethods || []).map((dm) => {
+    if (dm.method === 'immediate') return 'Instant Access';
+    if (dm.method === 'days') return `Time-Based (${dm.action ?? 0} days)`;
+    if (dm.method === 'date') return `Date-Based (${dm.action ? new Date(dm.action as string).toLocaleDateString() : 'Not set'})`;
+    return String(dm.method);
+  });
+  return {
+    drip: {
+      dripEnabled: course.dripEnabled ?? false,
+      dripMethods,
+      dripDisplayOption: course.dripDisplayOption ?? 'titleAndLessons',
+      dripHideUnlockDate: course.dripHideUnlockDate ?? false,
+      dripSendCommunication: course.dripSendCommunication ?? false
+    },
+    certificate: {
+      certificateEnabled: course.certificateEnabled ?? false,
+      certificateTitle: course.certificateTitle ?? 'Certificate of Completion',
+      certificateDescription: course.certificateDescription ?? '',
+      certificateCompletionPercentage: course.certificateCompletionPercentage ?? 100,
+      certificateTemplate: course.certificateTemplate ?? '1'
+    },
+    payment: {
+      listedPrice: course.listedPrice ?? { INR: 0, USD: 0, EUR: 0, GBP: 0 },
+      sellingPrice: course.sellingPrice ?? { INR: 0, USD: 0, EUR: 0, GBP: 0 },
+      globalPricingEnabled: course.globalPricingEnabled ?? true,
+      currencySpecificPricingEnabled: course.currencySpecificPricingEnabled ?? false,
+      enabledCurrencies: course.enabledCurrencies ?? { INR: true, USD: true, EUR: true, GBP: true },
+      installmentsOn: course.installmentsOn ?? false,
+      installmentPeriod: course.installmentPeriod ?? 30,
+      numberOfInstallments: course.numberOfInstallments ?? 3,
+      bufferTime: course.bufferTime ?? 7
+    },
+    additional: {
+      affiliateActive: course.affiliateActive ?? false,
+      affiliateRewardPercentage: course.affiliateRewardPercentage ?? 0,
+      watermarkRemovalEnabled: course.watermarkRemovalEnabled ?? false,
+      faqs: course.faqs ?? []
+    },
+    publishHistory: course.publishHistory ?? []
+  };
+}
+
+/** Compare previous snapshot with current; returns list of human-readable changes (current vs previous only). */
+function getDiffFromPrevious(
+  prev: PublishSnapshot | null | undefined,
+  current: PublishSnapshot | null | undefined
+): string[] {
+  const changes: string[] = [];
+  if (!current) return changes;
+  if (!prev) return ['First published version.'];
+
+  const dPrev = prev.details;
+  const dCur = current.details;
+  if (dPrev && dCur) {
+    if (dPrev.name !== dCur.name) changes.push(`Title: "${dPrev.name}" → "${dCur.name}"`);
+    if (dPrev.subtitle !== dCur.subtitle) changes.push(`Subtitle: "${dPrev.subtitle || '-'}" → "${dCur.subtitle || '-'}"`);
+    if (dPrev.category !== dCur.category) changes.push(`Category: ${dPrev.category} → ${dCur.category}`);
+    if (dPrev.level !== dCur.level) changes.push(`Level: ${dPrev.level} → ${dCur.level}`);
+  }
+
+  const cPrev = prev.curriculum;
+  const cCur = current.curriculum;
+  if (cPrev && cCur) {
+    if (cPrev.moduleCount !== cCur.moduleCount) changes.push(`Modules: ${cPrev.moduleCount} → ${cCur.moduleCount}`);
+    else if (cCur.modules?.length) {
+      cCur.modules.forEach((m, i) => {
+        const p = cPrev.modules?.[i];
+        if (p && (p.title !== m.title || p.lessonCount !== m.lessonCount)) {
+          changes.push(`Module ${i + 1}: "${p.title}" (${p.lessonCount} lessons) → "${m.title}" (${m.lessonCount} lessons)`);
+        }
+      });
+    }
+  }
+
+  const dripPrev = prev.drip;
+  const dripCur = current.drip;
+  if (dripPrev && dripCur) {
+    if (dripPrev.dripEnabled !== dripCur.dripEnabled) changes.push(`Drip: ${dripPrev.dripEnabled ? 'On' : 'Off'} → ${dripCur.dripEnabled ? 'On' : 'Off'}`);
+    if (dripPrev.dripMethodCount !== dripCur.dripMethodCount) changes.push(`Drip rules: ${dripPrev.dripMethodCount} → ${dripCur.dripMethodCount}`);
+  }
+
+  const certPrev = prev.certificate;
+  const certCur = current.certificate;
+  if (certPrev && certCur) {
+    if (certPrev.certificateEnabled !== certCur.certificateEnabled) changes.push(`Certificate: ${certPrev.certificateEnabled ? 'On' : 'Off'} → ${certCur.certificateEnabled ? 'On' : 'Off'}`);
+    if (certPrev.certificateTitle !== certCur.certificateTitle) changes.push(`Certificate title: "${certPrev.certificateTitle}" → "${certCur.certificateTitle}"`);
+  }
+
+  const payPrev = prev.payment;
+  const payCur = current.payment;
+  if (payPrev && payCur) {
+    if (payPrev.sellingPriceINR !== payCur.sellingPriceINR) changes.push(`Selling price (INR): ${payPrev.sellingPriceINR} → ${payCur.sellingPriceINR}`);
+    if (payPrev.sellingPriceUSD !== payCur.sellingPriceUSD) changes.push(`Selling price (USD): ${payPrev.sellingPriceUSD} → ${payCur.sellingPriceUSD}`);
+    if (payPrev.installmentsOn !== payCur.installmentsOn) changes.push(`Installments: ${payPrev.installmentsOn ? 'On' : 'Off'} → ${payCur.installmentsOn ? 'On' : 'Off'}`);
+  }
+
+  const addPrev = prev.additional;
+  const addCur = current.additional;
+  if (addPrev && addCur) {
+    if (addPrev.affiliateActive !== addCur.affiliateActive) changes.push(`Affiliate: ${addPrev.affiliateActive ? 'On' : 'Off'} → ${addCur.affiliateActive ? 'On' : 'Off'}`);
+    if (addPrev.affiliateRewardPercentage !== addCur.affiliateRewardPercentage) changes.push(`Affiliate reward %: ${addPrev.affiliateRewardPercentage} → ${addCur.affiliateRewardPercentage}`);
+    if (addPrev.watermarkRemovalEnabled !== addCur.watermarkRemovalEnabled) changes.push(`Watermark removal: ${addPrev.watermarkRemovalEnabled ? 'On' : 'Off'} → ${addCur.watermarkRemovalEnabled ? 'On' : 'Off'}`);
+    if (addPrev.faqsCount !== addCur.faqsCount) changes.push(`FAQs: ${addPrev.faqsCount} → ${addCur.faqsCount} questions`);
+  }
+
+  if (changes.length === 0) return ['No changes from previous version.'];
+  return changes;
+}
+
+/** Format snapshot for "what was saved" display (section labels + key values). */
+function formatSnapshotSummary(snap: PublishSnapshot | null | undefined): { section: string; lines: string[] }[] {
+  if (!snap) return [];
+  const out: { section: string; lines: string[] }[] = [];
+  if (snap.details) {
+    out.push({
+      section: 'Course details',
+      lines: [
+        `Title: ${snap.details.name || '-'}`,
+        `Category: ${snap.details.category || '-'}, Level: ${snap.details.level || '-'}`,
+        `Language: ${snap.details.language || '-'}`
+      ]
+    });
+  }
+  if (snap.curriculum) {
+    out.push({
+      section: 'Curriculum',
+      lines: [
+        `Modules: ${snap.curriculum.moduleCount}`,
+        ...(snap.curriculum.modules || []).map((m, i) => `  ${i + 1}. ${m.title} (${m.lessonCount} lessons)`)
+      ]
+    });
+  }
+  if (snap.drip) {
+    out.push({
+      section: 'Drip',
+      lines: [
+        `Enabled: ${snap.drip.dripEnabled ? 'Yes' : 'No'}`,
+        snap.drip.dripEnabled ? `Rules: ${snap.drip.dripMethodCount}` : []
+      ].flat()
+    });
+  }
+  if (snap.certificate) {
+    out.push({
+      section: 'Certificate',
+      lines: [
+        `Enabled: ${snap.certificate.certificateEnabled ? 'Yes' : 'No'}`,
+        snap.certificate.certificateTitle ? `Title: ${snap.certificate.certificateTitle}` : []
+      ].flat()
+    });
+  }
+  if (snap.payment) {
+    out.push({
+      section: 'Payment',
+      lines: [
+        `INR: ₹${snap.payment.sellingPriceINR} (list ₹${snap.payment.listedPriceINR})`,
+        `USD: $${snap.payment.sellingPriceUSD} (list $${snap.payment.listedPriceUSD})`,
+        `Installments: ${snap.payment.installmentsOn ? 'On' : 'Off'}`
+      ]
+    });
+  }
+  if (snap.additional) {
+    out.push({
+      section: 'Additional',
+      lines: [
+        `Affiliate: ${snap.additional.affiliateActive ? 'On' : 'Off'}${snap.additional.affiliateActive ? ` (${snap.additional.affiliateRewardPercentage}%)` : ''}`,
+        `Watermark removal: ${snap.additional.watermarkRemovalEnabled ? 'On' : 'Off'}`,
+        `FAQs: ${snap.additional.faqsCount} questions`
+      ]
+    });
+  }
+  return out;
+}
+
+function VersionHistoryEntry({
+  version,
+  publishedAt,
+  summary,
+  diffLines,
+  isFirstVersion,
+  hasSnapshot
+}: {
+  version: number;
+  publishedAt: string;
+  summary: { section: string; lines: string[] }[];
+  diffLines: string[];
+  isFirstVersion: boolean;
+  hasSnapshot: boolean;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        borderRadius: 2,
+        overflow: 'hidden',
+        border: '1px solid rgba(108, 99, 255, 0.2)',
+        bgcolor: 'rgba(108, 99, 255, 0.04)'
+      }}
+    >
+      <Box
+        onClick={() => setExpanded((e) => !e)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 1.5,
+          px: 2,
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'rgba(108, 99, 255, 0.08)' }
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600}>
+          Version {version}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            {new Date(publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          </Typography>
+          <IconButton size="small" aria-label={expanded ? 'Collapse' : 'Expand'}>
+            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
+        </Box>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ px: 2, pb: 2, pt: 0 }}>
+          {hasSnapshot ? (
+            <>
+              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                What was saved
+              </Typography>
+              <Stack spacing={1} sx={{ mb: 2 }}>
+                {summary.map(({ section, lines }) => (
+                  <Box key={section}>
+                    <Typography variant="caption" fontWeight={600} color="primary.main">{section}</Typography>
+                    <List dense disablePadding sx={{ pl: 1 }}>
+                      {lines.filter(Boolean).map((line, i) => (
+                        <ListItem key={i} disablePadding sx={{ py: 0, minHeight: 24 }}>
+                          <ListItemText primary={line} primaryTypographyProps={{ variant: 'caption' }} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                ))}
+              </Stack>
+              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                {isFirstVersion ? 'First version' : `What changed from Version ${version - 1}`}
+              </Typography>
+              <List dense disablePadding sx={{ pl: 1 }}>
+                {diffLines.map((line, i) => (
+                  <ListItem key={i} disablePadding sx={{ py: 0, minHeight: 24 }}>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }} />
+                    </ListItemIcon>
+                    <ListItemText primary={line} primaryTypographyProps={{ variant: 'caption' }} />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              No snapshot saved for this version (published before snapshot was enabled).
+            </Typography>
+          )}
+        </Box>
+      </Collapse>
+    </Paper>
+  );
+}
 
 interface PreviewPublishStepProps {
+  courseId?: string | null;
+  /** When provided, Step 6 "Save as Draft" calls this (parent builds full draft payload and saves). */
+  onSaveDraft?: () => Promise<void | boolean>;
+  /** When provided, Step 6 "Publish Course" calls this. Otherwise step calls courseService.publishCourse(courseId). */
+  onPublish?: () => Promise<void>;
   courseData?: {
     // Course Details
     title?: string;
@@ -95,6 +401,17 @@ interface PreviewPublishStepProps {
         assignmentFields?: any;
       }>;
     }>;
+    
+    // Drip Content
+    dripEnabled?: boolean;
+    dripMethods?: Array<{
+      id: string;
+      method: 'immediate' | 'days' | 'date';
+      action?: string | number;
+    }>;
+    dripDisplayOption?: 'title' | 'titleAndLessons' | 'hide';
+    dripHideUnlockDate?: boolean;
+    dripSendCommunication?: boolean;
   };
 }
 
@@ -158,16 +475,39 @@ interface CoursePreviewData {
   }>;
 }
 
-const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: propsCourseData }) => {
-  console.log('PreviewPublishStep rendered with data:', propsCourseData);
-  
+const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseId, courseData: propsCourseData, onSaveDraft, onPublish }) => {
+  const navigate = useNavigate();
   const [publishing, setPublishing] = React.useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = React.useState(false);
   const [savingDraft, setSavingDraft] = React.useState(false);
+  /** Settings loaded from collections (API) for Drip, Certificate, Payment, Additional boxes */
+  const [settingsFromApi, setSettingsFromApi] = React.useState<SettingsFromApi | null>(null);
+  const [loadingSettings, setLoadingSettings] = React.useState(false);
+  const { success, error: showError, toast, hideToast } = useToast();
   
   // State for expanded modules and lessons
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
   const [expandedLessons, setExpandedLessons] = React.useState<Set<string>>(new Set());
+
+  // Fetch course from backend when courseId is present so the four boxes show actual data from collections
+  React.useEffect(() => {
+    if (!courseId || !courseId.trim()) {
+      setSettingsFromApi(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSettings(true);
+    setSettingsFromApi(null);
+    courseService.getCourse(courseId).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) {
+        setSettingsFromApi(mapCourseToSettings(res.data));
+      }
+    }).finally(() => {
+      if (!cancelled) setLoadingSettings(false);
+    });
+    return () => { cancelled = true; };
+  }, [courseId]);
   
   // Toggle module expansion
   const toggleModule = (moduleId: string) => {
@@ -221,11 +561,20 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
         ]
       }
     ],
-    dripEnabled: true,
-    dripMethods: ["Time-based", "Completion-based"],
-    displayOption: "Show all lessons",
-    hideUnlockDate: false,
-    sendCommunication: true,
+    dripEnabled: propsCourseData?.dripEnabled || false,
+    dripMethods: propsCourseData?.dripMethods 
+      ? propsCourseData.dripMethods.map((dm: any) => {
+          const methodNames: { [key: string]: string } = {
+            immediate: 'Instant Access',
+            days: `Time-Based (${dm.action || 0} days)`,
+            date: `Date-Based (${dm.action ? new Date(dm.action).toLocaleDateString() : 'Not set'})`
+          };
+          return methodNames[dm.method] || dm.method;
+        })
+      : [],
+    displayOption: propsCourseData?.dripDisplayOption || 'titleAndLessons',
+    hideUnlockDate: propsCourseData?.dripHideUnlockDate || false,
+    sendCommunication: propsCourseData?.dripSendCommunication || false,
     certificateEnabled: true,
     certificateTitle: "Web Development Certificate",
     certificateDescription: "Certificate of completion for web development course",
@@ -251,18 +600,52 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
   };
 
   const handlePublish = async () => {
+    if (!courseId || !courseId.trim()) {
+      showError('Save as draft first to get a course ID, then publish.');
+      return;
+    }
     setPublishing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setPublishing(false);
-    setShowSuccessDialog(true);
+    try {
+      if (onPublish) {
+        await onPublish();
+      } else {
+        const result = await courseService.publishCourse(courseId, 'Live & Selling');
+        if (!result.success) {
+          showError(result.message || 'Failed to publish course');
+          return;
+        }
+      }
+      success('Course published successfully!');
+      setShowSuccessDialog(true);
+      // Refetch course so version history shows the new publish
+      if (courseId) {
+        courseService.getCourse(courseId).then((res) => {
+          if (res.success && res.data) {
+            setSettingsFromApi(mapCourseToSettings(res.data));
+          }
+        });
+      }
+    } catch {
+      showError('Failed to publish course');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const handleSaveDraft = async () => {
-    setSavingDraft(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setSavingDraft(false);
+    if (onSaveDraft) {
+      setSavingDraft(true);
+      try {
+        await onSaveDraft();
+        success('Draft saved successfully!');
+      } catch {
+        showError('Failed to save draft');
+      } finally {
+        setSavingDraft(false);
+      }
+      return;
+    }
+    showError('Save as draft is not available from this view. Use the Save Draft button in the builder.');
   };
 
   const getLessonTypeIcon = (type: string) => {
@@ -277,7 +660,7 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
     return icons[type] || <DescriptionIcon />;
   };
 
-  const formatDuration = (
+  const _formatDuration = (
     value?: number | string | null,
     options: { verbose?: boolean } = {}
   ): string | null => {
@@ -404,6 +787,22 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                       {courseData.subtitle}
                     </Typography>
                   </Box>
+                  {courseId && (
+                    <Box>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        Course ID:
+                      </Typography>
+                      <Chip 
+                        label={courseId} 
+                        sx={{ 
+                          bgcolor: 'rgba(108, 99, 255, 0.1)',
+                          color: '#6C63FF',
+                          fontWeight: 600,
+                          fontFamily: 'monospace'
+                        }} 
+                      />
+                    </Box>
+                  )}
                   <Stack direction="row" spacing={2} flexWrap="wrap">
                     <Chip icon={<CategoryIcon />} label={courseData.category} color="primary" />
                     <Chip icon={<SchoolIcon />} label={courseData.level} color="secondary" />
@@ -471,7 +870,7 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                         </ListItem>
                         <Collapse in={isModuleExpanded} timeout="auto" unmountOnExit>
                           <List sx={{ pl: 4, mt: 1 }}>
-                            {module.lessons.map((lesson, lessonIndex) => {
+                            {module.lessons.map((lesson, _lessonIndex) => {
                               const isLessonExpanded = expandedLessons.has(lesson.id);
                               const lessonData = fullModuleData?.lessons?.find(l => l.id === lesson.id);
                               return (
@@ -921,112 +1320,235 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
                 </List>
               </Paper>
 
-              {/* Drip Content Settings */}
-              {courseData.dripEnabled && (
-                <Paper sx={{ p: 3, borderRadius: 3 }}>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    ⏰ Drip Content Settings
-                  </Typography>
-                  <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      • Drip Methods: {courseData.dripMethods.join(', ')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Display Option: {courseData.displayOption}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Hide Unlock Date: {courseData.hideUnlockDate ? 'Yes' : 'No'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Send Communication: {courseData.sendCommunication ? 'Yes' : 'No'}
-                    </Typography>
+              {/* Drip Content Settings — from collections */}
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  ⏰ Drip Content Settings
+                </Typography>
+                {loadingSettings && courseId ? (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" color="text.secondary">Loading from course…</Typography>
                   </Stack>
-                </Paper>
-              )}
+                ) : (() => {
+                  const drip = settingsFromApi?.drip ?? {
+                    dripEnabled: courseData.dripEnabled,
+                    dripMethods: courseData.dripMethods,
+                    dripDisplayOption: courseData.displayOption,
+                    dripHideUnlockDate: courseData.hideUnlockDate,
+                    dripSendCommunication: courseData.sendCommunication
+                  };
+                  return (
+                    <Stack spacing={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        • Drip Enabled: {drip.dripEnabled ? 'Yes' : 'No'}
+                      </Typography>
+                      {drip.dripEnabled && (
+                        <>
+                          <Typography variant="body2" color="text.secondary">
+                            • Drip Methods: {drip.dripMethods.length ? drip.dripMethods.join(', ') : 'None'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            • Display Option: {drip.dripDisplayOption}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            • Hide Unlock Date: {drip.dripHideUnlockDate ? 'Yes' : 'No'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            • Send Communication: {drip.dripSendCommunication ? 'Yes' : 'No'}
+                          </Typography>
+                        </>
+                      )}
+                    </Stack>
+                  );
+                })()}
+              </Paper>
 
-              {/* Certificate Settings */}
-              {courseData.certificateEnabled && (
-                <Paper sx={{ p: 3, borderRadius: 3 }}>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    🏆 Certificate Settings
-                  </Typography>
-                  <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      • Certificate Title: {courseData.certificateTitle}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Completion Percentage: {courseData.completionPercentage}%
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      • Template: {courseData.template}
-                    </Typography>
+              {/* Certificate Settings — from collections */}
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  🏆 Certificate Settings
+                </Typography>
+                {loadingSettings && courseId ? (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" color="text.secondary">Loading from course…</Typography>
                   </Stack>
-                </Paper>
-              )}
+                ) : (() => {
+                  const cert = settingsFromApi?.certificate ?? {
+                    certificateEnabled: courseData.certificateEnabled,
+                    certificateTitle: courseData.certificateTitle,
+                    certificateDescription: courseData.certificateDescription,
+                    certificateCompletionPercentage: courseData.completionPercentage,
+                    certificateTemplate: courseData.template
+                  };
+                  return (
+                    <Stack spacing={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        • Certificate Enabled: {cert.certificateEnabled ? 'Yes' : 'No'}
+                      </Typography>
+                      {cert.certificateEnabled && (
+                        <>
+                          <Typography variant="body2" color="text.secondary">
+                            • Certificate Title: {cert.certificateTitle}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            • Completion Percentage: {cert.certificateCompletionPercentage}%
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            • Template: {cert.certificateTemplate}
+                          </Typography>
+                        </>
+                      )}
+                    </Stack>
+                  );
+                })()}
+              </Paper>
 
-              {/* Payment Settings */}
+              {/* Payment Settings — from collections */}
               <Paper sx={{ p: 3, borderRadius: 3 }}>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
                   💳 Payment Settings
                 </Typography>
-                <Stack spacing={2}>
-                  {courseData.globalPricingEnabled && (
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        Global Pricing
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        List Price: ${courseData.globalListPrice} | Actual Price: ${courseData.globalActualPrice}
-                      </Typography>
-                    </Box>
-                  )}
-                  {courseData.emiEnabled && (
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        EMI Options
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {courseData.numberOfInstallments} installments over {courseData.installmentPeriod} months
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
+                {loadingSettings && courseId ? (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" color="text.secondary">Loading from course…</Typography>
+                  </Stack>
+                ) : (() => {
+                  const pay = settingsFromApi?.payment ?? {
+                    listedPrice: { INR: parseFloat(courseData.globalListPrice || '0') || 0, USD: 0, EUR: 0, GBP: 0 },
+                    sellingPrice: { INR: parseFloat(courseData.globalActualPrice || '0') || 0, USD: 0, EUR: 0, GBP: 0 },
+                    globalPricingEnabled: courseData.globalPricingEnabled,
+                    currencySpecificPricingEnabled: courseData.currencySpecificPricingEnabled,
+                    enabledCurrencies: {} as { [key: string]: boolean },
+                    installmentsOn: courseData.emiEnabled,
+                    installmentPeriod: courseData.installmentPeriod,
+                    numberOfInstallments: courseData.numberOfInstallments,
+                    bufferTime: courseData.bufferTime
+                  };
+                  const currencies = Object.entries(pay.enabledCurrencies || {}).filter(([, v]) => v).map(([k]) => k);
+                  const activeCurrencies = currencies.length ? currencies : ['INR', 'USD', 'EUR', 'GBP'];
+                  const sym: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
+                  return (
+                    <Stack spacing={2}>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Pricing Mode
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {pay.globalPricingEnabled ? 'Global pricing' : 'Currency-specific pricing'}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Prices (from collections)
+                        </Typography>
+                        <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                          {activeCurrencies.map((cur) => (
+                            <Typography key={cur} variant="body2" color="text.secondary">
+                              {cur}: List {sym[cur] || cur}{pay.listedPrice[cur] ?? 0} → Sell {sym[cur] || cur}{pay.sellingPrice[cur] ?? 0}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      </Box>
+                      {pay.installmentsOn && (
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight={600}>
+                            EMI / Installments
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {pay.numberOfInstallments} installments, every {pay.installmentPeriod} days, buffer {pay.bufferTime} days
+                          </Typography>
+                        </Box>
+                      )}
+                    </Stack>
+                  );
+                })()}
               </Paper>
 
-              {/* Additional Settings */}
+              {/* Additional Settings — from collections */}
               <Paper sx={{ p: 3, borderRadius: 3 }}>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
                   ⚙️ Additional Settings
                 </Typography>
-                <Stack spacing={2}>
-                  {courseData.affiliateRewardEnabled && (
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        Affiliate Rewards
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {courseData.affiliateRewardPercentage}% commission for affiliates
-                      </Typography>
-                    </Box>
-                  )}
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Watermark Removal
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {courseData.watermarkRemovalEnabled ? 'Enabled' : 'Disabled'}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      FAQs
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {courseData.faqs.length} questions added
-                    </Typography>
-                  </Box>
-                </Stack>
+                {loadingSettings && courseId ? (
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" color="text.secondary">Loading from course…</Typography>
+                  </Stack>
+                ) : (() => {
+                  const add = settingsFromApi?.additional ?? {
+                    affiliateActive: courseData.affiliateRewardEnabled,
+                    affiliateRewardPercentage: parseFloat(courseData.affiliateRewardPercentage || '0') || 0,
+                    watermarkRemovalEnabled: courseData.watermarkRemovalEnabled,
+                    faqs: courseData.faqs.map((f) => ({ question: f.question, answer: f.answer }))
+                  };
+                  return (
+                    <Stack spacing={2}>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Affiliate Rewards
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {add.affiliateActive ? `${add.affiliateRewardPercentage}% commission for affiliates` : 'Disabled'}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Watermark Removal
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {add.watermarkRemovalEnabled ? 'Enabled' : 'Disabled'}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          FAQs
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {add.faqs.length} questions added
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  );
+                })()}
               </Paper>
+
+              {/* Version history — what was saved + diff from previous (above Ready to Launch) */}
+              {settingsFromApi?.publishHistory && settingsFromApi.publishHistory.length > 0 && (() => {
+                const sorted = [...settingsFromApi.publishHistory]
+                  .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+                return (
+                  <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'rgba(108, 99, 255, 0.05)' }}>
+                    <Typography variant="h6" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      📋 Version history
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Changes go live for learners after each publish. For each version: what was saved and what changed from the previous version.
+                    </Typography>
+                    <Stack spacing={1.5}>
+                      {sorted.map((entry, sortedIndex) => {
+                        const prevEntry = sorted[sortedIndex + 1] ?? null; // previous version (older)
+                        const diffLines = getDiffFromPrevious(prevEntry?.snapshot, entry.snapshot);
+                        const summary = formatSnapshotSummary(entry.snapshot);
+                        const hasSnapshot = summary.length > 0;
+                        return (
+                          <VersionHistoryEntry
+                            key={`v${entry.version}-${entry.publishedAt}`}
+                            version={entry.version}
+                            publishedAt={entry.publishedAt}
+                            summary={summary}
+                            diffLines={diffLines}
+                            isFirstVersion={!prevEntry}
+                            hasSnapshot={hasSnapshot}
+                          />
+                        );
+                      })}
+                    </Stack>
+                  </Paper>
+                );
+              })()}
 
               {/* Action Buttons */}
               <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'rgba(108, 99, 255, 0.05)' }}>
@@ -1096,6 +1618,22 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
             <Typography variant="h4" fontWeight={700} color="#4CAF50" gutterBottom>
               🎉 Course Published Successfully!
             </Typography>
+            {courseId && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Course ID:
+                </Typography>
+                <Chip 
+                  label={courseId} 
+                  sx={{ 
+                    bgcolor: 'rgba(76, 175, 80, 0.1)',
+                    color: '#4CAF50',
+                    fontWeight: 600,
+                    fontFamily: 'monospace'
+                  }} 
+                />
+              </Box>
+            )}
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
               Your course is now live and available to students worldwide. 
               You can manage it from your dashboard.
@@ -1112,7 +1650,10 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
         <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
           <Button
             variant="contained"
-            onClick={() => setShowSuccessDialog(false)}
+            onClick={() => {
+              setShowSuccessDialog(false);
+              navigate('/love/learnloop');
+            }}
             sx={{
               background: 'linear-gradient(135deg, #4CAF50 0%, #45A049 100%)',
               minWidth: 120
@@ -1122,6 +1663,8 @@ const PreviewPublishStep: React.FC<PreviewPublishStepProps> = ({ courseData: pro
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ToastNotification toast={toast} onClose={hideToast} />
     </Box>
   );
 };

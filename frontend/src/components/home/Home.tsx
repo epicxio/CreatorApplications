@@ -1,4 +1,4 @@
-import { Box, AppBar, Toolbar, Typography, Button, styled } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, styled } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useState, useEffect } from 'react';
@@ -131,12 +131,12 @@ export const Home = () => {
   const [logoError, setLogoError] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
-  const navbarBackground = useTransform(
+  const _navbarBackground = useTransform(
     scrollY,
     [0, 100],
     ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.95)']
   );
-  const navbarColor = useTransform(
+  const _navbarColor = useTransform(
     scrollY,
     [0, 100],
     ['white', '#1a1a1a']
@@ -148,8 +148,6 @@ export const Home = () => {
     });
     return () => unsubscribe();
   }, [scrollY]);
-
-  console.log('Home component (Marketing Page) is rendering');
 
   return (
     <Box sx={{ minHeight: '100vh', background: '#ffffff' }}>

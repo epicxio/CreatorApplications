@@ -39,7 +39,6 @@ class UserTypeService {
       const response = await axios.get(this.baseURL);
       return response.data;
     } catch (error) {
-      console.error('Error fetching user types:', error);
       throw error;
     }
   }
@@ -49,7 +48,6 @@ class UserTypeService {
       const response = await axios.get(`${this.baseURL}/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching user type:', error);
       throw error;
     }
   }
@@ -59,7 +57,6 @@ class UserTypeService {
       const response = await axios.post(this.baseURL, userTypeData);
       return response.data;
     } catch (error) {
-      console.error('Error creating user type:', error);
       throw error;
     }
   }
@@ -69,7 +66,6 @@ class UserTypeService {
       const response = await axios.put(`${this.baseURL}/${id}`, userTypeData);
       return response.data;
     } catch (error) {
-      console.error('Error updating user type:', error);
       throw error;
     }
   }
@@ -78,10 +74,10 @@ class UserTypeService {
     try {
       await axios.delete(`${this.baseURL}/${id}`);
     } catch (error) {
-      console.error('Error deleting user type:', error);
       throw error;
     }
   }
 }
 
-export default new UserTypeService(); 
+const userTypeService = new UserTypeService();
+export default userTypeService; 

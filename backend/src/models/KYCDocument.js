@@ -46,6 +46,12 @@ const kycDocumentSchema = new mongoose.Schema({
     required: true
   },
 
+  // S3 key when document is stored in S3 (users/{userId}/kyc/{documentType}/{filename})
+  s3Key: {
+    type: String,
+    default: null
+  },
+
   fileSize: {
     type: Number,
     required: true

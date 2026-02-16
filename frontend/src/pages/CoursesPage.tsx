@@ -15,7 +15,7 @@ import {
   AppBar,
   Toolbar
 } from '@mui/material';
-import { FilterList as FilterIcon, Search as SearchIcon } from '@mui/icons-material';
+import { FilterList as FilterIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { Course, CourseFilters } from '../types/course';
 import { courseService } from '../services/courseService';
@@ -55,27 +55,41 @@ const CoursesPage: React.FC = () => {
       } else {
         setError(response.message || 'Failed to load courses');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred while loading courses');
-      console.error('Error loading courses:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Load user's enrolled courses and progress
+  // Load user's enrolled courses and progress from backend (with localStorage fallback)
   const loadUserProgress = async () => {
     if (!user?._id) return;
 
     try {
-      const allProgress = progressService.getAllProgress(user._id);
-      const enrolledSet = new Set(allProgress.map(p => p.courseId));
-      const progressMap = new Map(allProgress.map(p => [p.courseId, p.overallProgress]));
-      
+      const response = await courseService.getMyProgress();
+      let allProgress = response.success && response.data.length > 0 ? response.data : null;
+      if (!allProgress?.length) {
+        allProgress = progressService.getAllProgress(user._id);
+      } else {
+        allProgress.forEach((p) => {
+          progressService.syncProgressFromApi(p.courseId, user._id!, {
+            overallProgress: p.overallProgress,
+            completedLessons: p.completedLessons,
+            lastAccessed: p.lastAccessed,
+            enrolledAt: p.enrolledAt
+          });
+        });
+      }
+      const enrolledSet = new Set(allProgress.map((p: { courseId: string }) => p.courseId));
+      const progressMap = new Map(allProgress.map((p: { courseId: string; overallProgress: number }) => [p.courseId, p.overallProgress]));
+
       setEnrolledCourses(enrolledSet);
       setCourseProgress(progressMap);
-    } catch (error) {
-      console.error('Error loading user progress:', error);
+    } catch {
+      const local = progressService.getAllProgress(user._id);
+      setEnrolledCourses(new Set(local.map(p => p.courseId)));
+      setCourseProgress(new Map(local.map(p => [p.courseId, p.overallProgress])));
     }
   };
 
@@ -99,9 +113,8 @@ const CoursesPage: React.FC = () => {
       } else {
         setError(response.message || 'Failed to enroll in course');
       }
-    } catch (error) {
+    } catch {
       setError('An error occurred while enrolling');
-      console.error('Error enrolling:', error);
     }
   };
 
@@ -137,6 +150,7 @@ const CoursesPage: React.FC = () => {
   useEffect(() => {
     loadCourses();
     loadUserProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load user progress when user changes
@@ -144,6 +158,7 @@ const CoursesPage: React.FC = () => {
     if (user?._id) {
       loadUserProgress();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id]);
 
   const renderFilters = () => (

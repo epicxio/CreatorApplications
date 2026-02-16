@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Container, Typography, Paper, IconButton, Tooltip, Button, Stack, TextField, MenuItem, Chip, InputLabel, Select, FormControl, OutlinedInput, CircularProgress } from '@mui/material';
-import { styled } from '@mui/system';
-import { CheckCircle, RadioButtonUnchecked, ArrowForward, ArrowBack, ArrowUpward, ArrowDownward } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Box, Typography, Paper, IconButton, Button, Stack, TextField, MenuItem, Chip, InputLabel, Select, FormControl, CircularProgress } from '@mui/material';
+import { RadioButtonUnchecked, ArrowUpward, ArrowDownward } from '@mui/icons-material';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import DescriptionIcon from '@mui/icons-material/Description';
 import QuizIcon from '@mui/icons-material/Quiz';
@@ -11,8 +9,6 @@ import LiveTvIcon from '@mui/icons-material/LiveTv';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import LinkIcon from '@mui/icons-material/Link';
-import InputAdornment from '@mui/material/InputAdornment';
-import VideoCallIcon from '@mui/icons-material/VideoCall';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
 import SvgIcon from '@mui/material/SvgIcon';
 import QuizQuestionEditor from './QuizQuestionEditor';
@@ -80,8 +76,7 @@ const meetingLinkMeta: {
   }
 };
 
-const allowedMeetingKeys = ['Google Meet', 'Zoom', 'Webex', 'Custom Link'] as const;
-type MeetingKey = typeof allowedMeetingKeys[number];
+const _allowedMeetingKeys = ['Google Meet', 'Zoom', 'Webex', 'Custom Link'] as const;
 
 interface CurriculumStepProps {
   modules?: Array<{
@@ -114,9 +109,10 @@ interface CurriculumStepProps {
     }>;
     [key: string]: any;
   }>>>;
+  courseId?: string | null;
 }
 
-const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, setModules: propSetModules }) => {
+const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, setModules: propSetModules, courseId }) => {
   // Use props if provided, otherwise use local state
   const [localModules, setLocalModules] = useState(initialModules);
   const modules = propModules !== undefined ? propModules : localModules;
@@ -125,9 +121,9 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
   
   // Upload state
   const [uploading, setUploading] = useState<{ [key: string]: boolean }>({});
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
-  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [, _setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [, setEditingModuleId] = useState<string | null>(null);
+  const [, setEditingLessonId] = useState<string | null>(null);
   const [newModuleTitle, setNewModuleTitle] = useState('');
   // Per-module new lesson input state
   const [newLessonInputs, setNewLessonInputs] = useState<{ [moduleId: string]: { title: string, type: string } }>({});
@@ -137,10 +133,8 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
   const [newLessonResources, setNewLessonResources] = useState<{ [moduleId: string]: Array<{ url: string, name: string, size: number }> }>({});
   const [newLessonVideoPairs, setNewLessonVideoPairs] = useState<{ [moduleId: string]: { video: { url: string, name: string, size: number }, thumbnail: { url: string, name: string } | null }[] }>({});
   const [newLessonAudioFiles, setNewLessonAudioFiles] = useState<{ [moduleId: string]: Array<{ url: string; name: string; size: number; storagePath?: string }> }>({});
-  // 1. Add a new state: const [lessonThumbnails, setLessonThumbnails] = useState<{ [lessonKey: string]: File | null }>({});
-  const [lessonThumbnails, setLessonThumbnails] = useState<{ [lessonKey: string]: (File | null)[] }>({});
-  // 1. Add state for videoPreviews
-  const [videoPreviews, setVideoPreviews] = useState<{ [lessonKey: string]: string | null }>({});
+  const [, _setLessonThumbnails] = useState<{ [lessonKey: string]: (File | null)[] }>({});
+  const [, _setVideoPreviews] = useState<{ [lessonKey: string]: string | null }>({});
 
   // Add new state for Live lesson fields and pre/post class message
   const [newLessonPreClassMessages, setNewLessonPreClassMessages] = useState<{ [moduleId: string]: string }>({});
@@ -486,6 +480,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
         ],
       }]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- newLessonInputs/newQuizQuestions intentionally excluded
   }, [addLessonModuleId, addLessonModuleId ? newLessonInputs[addLessonModuleId]?.type : undefined]);
 
   // Add state for quiz questions in the edit lesson form
@@ -756,11 +751,15 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                           }
                           
                           try {
-                            const response = await uploadService.uploadResource(file);
+                            if (!courseId) {
+                              errors.push(`Failed to upload ${file.name}: Course ID is required. Please save the course first.`);
+                              continue;
+                            }
+                            const response = await uploadService.uploadResource(file, courseId);
                             if (response.success && response.data) {
                               const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                               uploadedFiles.push({
-                                url: fileData.url,
+                                url: fileData.url || fileData.presignedUrl || '',
                                 name: fileData.originalName,
                                 size: fileData.size
                               });
@@ -858,11 +857,11 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                         {pair.video?.url && (
                           <Box sx={{ mt: 1 }}>
                             <video
-                              src={uploadService.getFileUrl(pair.video.url)}
+                              src={uploadService.getFileUrl(pair.video.url, (pair.video as any).presignedUrl)}
                               controls
                               style={{ maxWidth: 300, maxHeight: 200, borderRadius: 6, border: '1px solid #eee' }}
                               onError={(e) => {
-                                console.error('Error loading video:', pair.video.url);
+                                // Error loading video
                                 (e.target as HTMLVideoElement).style.display = 'none';
                               }}
                             />
@@ -903,7 +902,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                               }}
                             >
                               <img
-                                src={uploadService.getFileUrl(pair.thumbnail.url)}
+                                src={uploadService.getFileUrl(pair.thumbnail.url, (pair.thumbnail as any)?.presignedUrl)}
                                 alt="Thumbnail Preview"
                                 style={{ 
                                   maxWidth: '100%', 
@@ -913,7 +912,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                                   height: '100%'
                                 }}
                                 onError={(e) => {
-                                  console.error('Error loading thumbnail:', pair.thumbnail?.url);
+                                  // Error loading thumbnail
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
@@ -940,13 +939,17 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                                 
                                 (async () => {
                                   try {
-                                    const response = await uploadService.uploadThumbnail(file);
+                                    if (!courseId) {
+                                      showError('Course ID is required. Please save the course first.');
+                                      return;
+                                    }
+                                    const response = await uploadService.uploadThumbnail(file, courseId);
                                     if (response.success && response.data) {
                                       const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                                       setNewLessonVideoPairs(pairs => ({
                                         ...pairs,
                                         [addLessonModuleId]: (pairs[addLessonModuleId] || []).map((p, i) => {
-                                          return i === idx ? { ...p, thumbnail: { url: fileData.url, name: fileData.originalName } } : p;
+                                          return i === idx ? { ...p, thumbnail: { url: fileData.url || fileData.presignedUrl || '', name: fileData.originalName } } : p;
                                         })
                                       }));
                                       success('Thumbnail uploaded successfully!');
@@ -993,25 +996,34 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                           
                           setUploading(upload => ({ ...upload, [`video-${addLessonModuleId}`]: true }));
                           
-                          try {
-                            const response = await uploadService.uploadVideo(file);
-                            if (response.success && response.data) {
-                              const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
-                              setNewLessonVideoPairs(pairs => ({
-                                ...pairs,
-                                [addLessonModuleId]: [...(pairs[addLessonModuleId] || []), { 
-                                  video: { url: fileData.url, name: fileData.originalName, size: fileData.size }, 
-                                  thumbnail: null 
-                                }]
-                              }));
-                              success('Video uploaded successfully!');
-                            }
-                          } catch (err: any) {
-                            showError(err.response?.data?.message || 'Failed to upload video');
-                          } finally {
-                            setUploading(upload => ({ ...upload, [`video-${addLessonModuleId}`]: false }));
-                            e.target.value = '';
+                        try {
+                          if (!courseId) {
+                            showError('Course ID is required. Please save the course first.');
+                            return;
                           }
+                          const response = await uploadService.uploadVideo(file, courseId);
+                          if (response.success && response.data) {
+                            const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
+                            setNewLessonVideoPairs(pairs => ({
+                              ...pairs,
+                              [addLessonModuleId]: [...(pairs[addLessonModuleId] || []), { 
+                                video: { 
+                                  url: fileData.url || fileData.presignedUrl || '', 
+                                  presignedUrl: fileData.presignedUrl,
+                                  name: fileData.originalName, 
+                                  size: fileData.size 
+                                }, 
+                                thumbnail: null 
+                              }]
+                            }));
+                            success('Video uploaded successfully!');
+                          }
+                        } catch (err: any) {
+                          showError(err.response?.data?.message || 'Failed to upload video');
+                        } finally {
+                          setUploading(upload => ({ ...upload, [`video-${addLessonModuleId}`]: false }));
+                          e.target.value = '';
+                        }
                         }}
                       />
                     </Button>
@@ -1040,7 +1052,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                       {/* Audio preview */}
                       <Box sx={{ mt: 1 }}>
                         <audio
-                          src={uploadService.getFileUrl(file.url)}
+                          src={uploadService.getFileUrl(file.url, (file as any).presignedUrl)}
                           controls
                           style={{ width: '100%', maxWidth: 300, borderRadius: 6, border: '1px solid #eee' }}
                         />
@@ -1079,16 +1091,20 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                           setUploading(upload => ({ ...upload, [`audio-${addLessonModuleId}`]: true }));
                           
                           try {
-                            const response = await uploadService.uploadAudio(file);
+                            if (!courseId) {
+                              showError('Course ID is required. Please save the course first.');
+                              return;
+                            }
+                            const response = await uploadService.uploadAudio(file, courseId);
                             if (response.success && response.data) {
                               const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                               setNewLessonAudioFiles(files => ({
                                 ...files,
                                 [addLessonModuleId]: [...(files[addLessonModuleId] || []), {
-                                  url: fileData.url,
+                                  url: fileData.url || fileData.presignedUrl || '',
                                   name: fileData.originalName,
                                   size: fileData.size,
-                                  storagePath: fileData.path
+                                  storagePath: fileData.s3Key || fileData.path
                                 }]
                               }));
                               success('Audio file uploaded successfully!');
@@ -1418,11 +1434,15 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                           }
                           
                           try {
-                            const response = await uploadService.uploadResource(file);
+                            if (!courseId) {
+                              errors.push(`Failed to upload ${file.name}: Course ID is required. Please save the course first.`);
+                              continue;
+                            }
+                            const response = await uploadService.uploadResource(file, courseId);
                             if (response.success && response.data) {
                               const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                               uploadedFiles.push({
-                                url: fileData.url,
+                                url: fileData.url || fileData.presignedUrl || '',
                                 name: fileData.originalName,
                                 size: fileData.size
                               });
@@ -1520,11 +1540,11 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                         {pair.video?.url && (
                           <Box sx={{ mt: 1 }}>
                             <video
-                              src={uploadService.getFileUrl(pair.video.url)}
+                              src={uploadService.getFileUrl(pair.video.url, (pair.video as any).presignedUrl)}
                               controls
                               style={{ maxWidth: 300, maxHeight: 200, borderRadius: 6, border: '1px solid #eee' }}
                               onError={(e) => {
-                                console.error('Error loading video:', pair.video.url);
+                                // Error loading video
                                 (e.target as HTMLVideoElement).style.display = 'none';
                               }}
                             />
@@ -1566,7 +1586,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                               }}
                             >
                               <img
-                                src={uploadService.getFileUrl(pair.thumbnail.url)}
+                                src={uploadService.getFileUrl(pair.thumbnail.url, (pair.thumbnail as any)?.presignedUrl)}
                                 alt="Thumbnail Preview"
                                 style={{ 
                                   maxWidth: '100%', 
@@ -1576,7 +1596,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                                   height: '100%'
                                 }}
                                 onError={(e) => {
-                                  console.error('Error loading thumbnail:', pair.thumbnail?.url);
+                                  // Error loading thumbnail
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
@@ -1603,11 +1623,15 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                                 
                                 (async () => {
                                   try {
-                                    const response = await uploadService.uploadThumbnail(file);
+                                    if (!courseId) {
+                                      showError('Course ID is required. Please save the course first.');
+                                      return;
+                                    }
+                                    const response = await uploadService.uploadThumbnail(file, courseId);
                                     if (response.success && response.data) {
                                       const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                                       const updatedPairs = [...(lessonVideos || [])];
-                                      updatedPairs[idx] = { ...updatedPairs[idx], thumbnail: { url: fileData.url, name: fileData.originalName } };
+                                      updatedPairs[idx] = { ...updatedPairs[idx], thumbnail: { url: fileData.url || fileData.presignedUrl || '', name: fileData.originalName } };
                                       setNewLessonVideoPairs(pairs => ({ ...pairs, [selectedLessonId]: updatedPairs }));
                                       success('Thumbnail uploaded successfully!');
                                     }
@@ -1652,13 +1676,22 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                         setUploading(upload => ({ ...upload, [`video-${selectedLessonId}`]: true }));
                         
                         try {
-                          const response = await uploadService.uploadVideo(file);
+                          if (!courseId) {
+                            showError('Course ID is required. Please save the course first.');
+                            return;
+                          }
+                          const response = await uploadService.uploadVideo(file, courseId);
                           if (response.success && response.data) {
                             const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                             setNewLessonVideoPairs(pairs => ({
                               ...pairs,
                               [selectedLessonId]: [...(pairs[selectedLessonId] || []), { 
-                                video: { url: fileData.url, name: fileData.originalName, size: fileData.size }, 
+                                video: { 
+                                  url: fileData.url || fileData.presignedUrl || '', 
+                                  presignedUrl: fileData.presignedUrl,
+                                  name: fileData.originalName, 
+                                  size: fileData.size 
+                                }, 
                                 thumbnail: null 
                               }]
                             }));
@@ -1696,7 +1729,7 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                       {/* Audio preview */}
                       <Box sx={{ mt: 1 }}>
                         <audio
-                          src={uploadService.getFileUrl(file.url)}
+                          src={uploadService.getFileUrl(file.url, (file as any).presignedUrl)}
                           controls
                           style={{ width: '100%', maxWidth: 300, borderRadius: 6, border: '1px solid #eee' }}
                         />
@@ -1733,16 +1766,20 @@ const CurriculumStep: React.FC<CurriculumStepProps> = ({ modules: propModules, s
                           setUploading(upload => ({ ...upload, [`audio-${selectedLessonId}`]: true }));
                           
                           try {
-                            const response = await uploadService.uploadAudio(file);
+                            if (!courseId) {
+                              showError('Course ID is required. Please save the course first.');
+                              return;
+                            }
+                            const response = await uploadService.uploadAudio(file, courseId);
                             if (response.success && response.data) {
                               const fileData = Array.isArray(response.data) ? response.data[0] : response.data;
                               setNewLessonAudioFiles(files => ({
                                 ...files,
                                 [selectedLessonId]: [...(files[selectedLessonId] || []), {
-                                  url: fileData.url,
+                                  url: fileData.url || fileData.presignedUrl || '',
                                   name: fileData.originalName,
                                   size: fileData.size,
-                                  storagePath: fileData.path
+                                  storagePath: fileData.s3Key || fileData.path
                                 }]
                               }));
                               success('Audio file uploaded successfully!');

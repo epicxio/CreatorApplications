@@ -47,7 +47,6 @@ class RoleService {
       const response = await axios.get(this.roleURL);
       return response.data;
     } catch (error) {
-      console.error('Error fetching roles:', error);
       throw error;
     }
   }
@@ -58,7 +57,6 @@ class RoleService {
       const response = await axios.get(this.permissionURL);
       return response.data;
     } catch (error) {
-      console.error('Error fetching available permissions:', error);
       throw error;
     }
   }
@@ -69,7 +67,6 @@ class RoleService {
       // The API returns an array of UserType objects, we need to extract the name
       return response.data.map((userType: { name: string }) => userType.name);
     } catch (error) {
-      console.error('Error fetching user types:', error);
       throw error;
     }
   }
@@ -79,7 +76,6 @@ class RoleService {
       const response = await axios.get(`${this.roleURL}/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching role:', error);
       throw error;
     }
   }
@@ -89,7 +85,6 @@ class RoleService {
       const response = await axios.post(this.roleURL, roleData);
       return response.data;
     } catch (error) {
-      console.error('Error creating role:', error);
       throw error;
     }
   }
@@ -99,7 +94,6 @@ class RoleService {
       const response = await axios.put(`${this.roleURL}/${id}`, roleData);
       return response.data;
     } catch (error) {
-      console.error('Error updating role:', error);
       throw error;
     }
   }
@@ -108,10 +102,10 @@ class RoleService {
     try {
       await axios.delete(`${this.roleURL}/${id}`);
     } catch (error) {
-      console.error('Error deleting role:', error);
       throw error;
     }
   }
 }
 
-export default new RoleService(); 
+const roleService = new RoleService();
+export default roleService; 

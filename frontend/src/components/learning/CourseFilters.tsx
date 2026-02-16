@@ -2,10 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Chip,
   Button,
   Accordion,
@@ -23,7 +19,7 @@ import { courseService } from '../../services/courseService';
 
 interface CourseFiltersProps {
   filters: CourseFiltersType;
-  onFiltersChange: (filters: CourseFiltersType) => void;
+  onFiltersChange: (_filters: CourseFiltersType) => void;
   onClearFilters: () => void;
 }
 
@@ -49,8 +45,8 @@ const CourseFiltersComponent: React.FC<CourseFiltersProps> = ({
         setCategories(categoriesData);
         setLevels(levelsData);
         setLanguages(languagesData);
-      } catch (error) {
-        console.error('Error loading filter options:', error);
+      } catch {
+        // Filter options failed to load
       } finally {
         setLoading(false);
       }
@@ -87,7 +83,7 @@ const CourseFiltersComponent: React.FC<CourseFiltersProps> = ({
     });
   };
 
-  const handleTagToggle = (tag: string) => {
+  const _handleTagToggle = (tag: string) => {
     const currentTags = filters.tags || [];
     const newTags = currentTags.includes(tag)
       ? currentTags.filter(t => t !== tag)

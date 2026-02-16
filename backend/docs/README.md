@@ -31,6 +31,12 @@ JWT_SECRET=your_jwt_secret
 NODE_ENV=development
 ```
 
+### Certificate download URLs (production)
+
+When certificates are stored locally (no S3), the backend builds the certificate URL using `API_BASE_URL`. Set this in production so "Download certificate" opens a reachable URL:
+
+- **API_BASE_URL** – Public base URL of this API (e.g. `https://api.yourdomain.com`). Used for learner certificate PDF URLs. If unset, defaults to `http://localhost:PORT`. In production, set this so certificate links work when opened from the frontend.
+
 4. Start the development server
 ```bash
 npm run dev

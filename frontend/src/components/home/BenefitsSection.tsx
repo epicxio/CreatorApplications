@@ -1,9 +1,9 @@
-import { Box, Typography, Container, Grid, styled, keyframes } from '@mui/material';
+import { Typography, Container, Grid, styled, keyframes } from '@mui/material';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { Savings, TrendingUp, Security, SupportAgent, Speed, VerifiedUser } from '@mui/icons-material';
 
-const glow = keyframes`
+const _glow = keyframes`
   0%, 100% {
     box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
   }

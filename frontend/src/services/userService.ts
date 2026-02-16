@@ -1,8 +1,20 @@
-import axios from 'axios';
+import axios, { InternalAxiosRequestConfig } from 'axios';
 import { UserType } from './userTypeService';
 import { Role } from './roleService';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 export interface User {
   _id: string;
@@ -10,7 +22,13 @@ export interface User {
   email: string;
   userType: UserType;
   role?: Role;
-  status: 'active' | 'inactive' | 'deleted';
+  status: 'active' | 'inactive' | 'pending' | 'rejected' | 'suspended' | 'deleted';
+  suspendedAt?: string | null;
+  suspendedReason?: string | null;
+  suspendedBy?: string | { _id: string; name: string; email: string } | null;
+  reactivatedAt?: string | null;
+  reactivatedReason?: string | null;
+  reactivatedBy?: string | { _id: string; name: string; email: string } | null;
   
   // User IDs
   userId?: string; // Universal user ID for all types
@@ -152,52 +170,70 @@ class UserService {
       if (params?.search) queryParams.append('search', params.search);
       
       const url = queryParams.toString() ? `${this.baseURL}?${queryParams.toString()}` : this.baseURL;
-      const response = await axios.get(url);
+      const response = await api.get(url);
       return response.data;
     } catch (error) {
-      console.error('Error fetching users:', error);
       throw error;
     }
   }
 
   async getCreators(): Promise<User[]> {
     try {
-      const response = await axios.get(`${this.baseURL}/creators`);
+      const response = await api.get(`${this.baseURL}/creators`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching creators:', error);
       throw error;
     }
   }
 
   async getUserStats(): Promise<any> {
     try {
-      const response = await axios.get(`${this.baseURL}/stats`);
+      const response = await api.get(`${this.baseURL}/stats`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching user stats:', error);
       throw error;
     }
   }
 
   async createUser(userData: CreateUserData): Promise<User> {
-    const response = await axios.post(this.baseURL, userData);
+    const response = await api.post(this.baseURL, userData);
     return response.data;
   }
 
   async updateUser(id: string, userData: UpdateUserData): Promise<User> {
-    const response = await axios.put(`${this.baseURL}/${id}`, userData);
+    const response = await api.put(`${this.baseURL}/${id}`, userData);
     return response.data;
   }
   
   async deleteUser(id: string): Promise<void> {
-    await axios.delete(`${this.baseURL}/${id}`);
+    await api.delete(`${this.baseURL}/${id}`);
   }
 
   async resetPassword(id: string): Promise<{ temporaryPassword: string }> {
-    const response = await axios.post(`${this.baseURL}/${id}/reset-password`);
+    const response = await api.post(`${this.baseURL}/${id}/reset-password`);
     return response.data;
+  }
+
+  async approveUser(id: string): Promise<User> {
+    const response = await api.post(`${this.baseURL}/${id}/approve`);
+    return response.data?.user ?? response.data;
+  }
+
+  async rejectUser(id: string): Promise<User> {
+    const response = await api.post(`${this.baseURL}/${id}/reject`);
+    return response.data?.user ?? response.data;
+  }
+
+  async suspendUser(id: string, reason: string): Promise<User> {
+    const response = await api.post(`${this.baseURL}/${id}/suspend`, { reason });
+    return response.data?.user ?? response.data;
+  }
+
+  async unsuspendUser(id: string, reason: string): Promise<User> {
+    const response = await api.post(`${this.baseURL}/${id}/unsuspend`, { reason });
+    return response.data?.user ?? response.data;
   }
 }
 
-export default new UserService(); 
+const userService = new UserService();
+export default userService; 

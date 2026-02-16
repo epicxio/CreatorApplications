@@ -1,112 +1,1141 @@
-We will be developing now only UI here : 
-no backend or postgress required. 
+# Product Requirements Document (PRD)
+## Creator Marketplace Platform - Complete Documentation
 
-Product : ansatz: 
-1. Introduction
-1.1 Purpose
-This PRD outlines the requirements for developing a web-based mathematics education application designed for school students, teachers, parents, and corporate employees. The application will leverage React TSX for the frontend, integrate AI-driven personalization, and feature a futuristic UI/UX that is 5 years ahead of current standards. The goal is to create an engaging, secure, and scalable platform that delivers tailored mathematical content via videos, e-books, and interactive assessments.
+### Version: 2.0
+### Date: December 2024
+### Status: Active Development
 
-1.2 Scope
+---
+
+## Table of Contents
+1. [Executive Summary](#1-executive-summary)
+2. [Product Overview](#2-product-overview)
+3. [Ansatz - Mathematics Education Platform](#3-ansatz---mathematics-education-platform)
+4. [LearnLoop - Course Creation & Management System](#4-learnloop---course-creation--management-system)
+5. [Technical Architecture](#5-technical-architecture)
+6. [Development Status](#6-development-status)
+7. [Future Roadmap](#7-future-roadmap)
+
+---
+
+## 1. Executive Summary
+
+### 1.1 Product Vision
+The Creator Marketplace Platform is a comprehensive B2B2C platform designed to connect content creators, brands, and corporate entities. The platform consists of multiple product lines:
+
+1. **Ansatz**: A web-based mathematics education application for school students, teachers, parents, and corporate employees
+2. **LearnLoop**: A comprehensive course creation and management system for content creators
+
+### 1.2 Product Mission
+To democratize content creation and education by providing secure, scalable, and user-friendly platforms that empower creators, educators, and learners.
+
+### 1.3 Current Development Focus
+- **Phase 1 (UI Only)**: Frontend development for Ansatz mathematics education platform
+- **Phase 2 (Active)**: LearnLoop course creation system with full-stack implementation
+- **Phase 3 (Planned)**: Backend integration for Ansatz and advanced features
+
+---
+
+## 2. Product Overview
+
+### 2.1 Platform Components
+
+#### 2.1.1 Ansatz - Mathematics Education Platform
+A web-based mathematics education application designed for:
+- School students (various grade levels)
+- School teachers and parents
+- Corporate employees
+- School and corporate admins
+- Application admin
+
+**Current Status**: UI development phase (no backend/PostgreSQL required initially)
+
+#### 2.1.2 LearnLoop - Course Creation System
+A comprehensive course creation and management platform for content creators featuring:
+- Multi-step course builder
+- Curriculum management
+- Drip content (progressive content release)
+- Certificate generation
+- Payment integration
+- Course management dashboard
+
+**Current Status**: Full-stack implementation in progress
+
+### 2.2 Technology Stack
+
+#### Frontend
+- **Framework**: React 18 with TypeScript
+- **UI Library**: Material-UI (MUI) v5
+- **State Management**: React Context API, React Hooks
+- **Routing**: React Router v6
+- **HTTP Client**: Axios
+- **Styling**: Emotion (CSS-in-JS), Styled Components
+- **Animations**: Framer Motion
+- **Charts**: Recharts
+
+#### Backend
+- **Runtime**: Node.js
+- **Framework**: Express.js
+- **Database**: MongoDB with Mongoose ODM
+- **Authentication**: JWT (JSON Web Tokens)
+- **File Upload**: Multer
+- **Validation**: Express-validator
+- **Security**: bcryptjs for password hashing
+
+#### Infrastructure
+- **Database**: MongoDB Atlas (Cloud)
+- **File Storage**: Local file system with organized structure
+- **Environment**: Development, Staging, Production ready
+
+---
+
+## 3. Ansatz - Mathematics Education Platform
+
+### 3.1 Purpose
+This PRD outlines the requirements for developing a web-based mathematics education application designed for school students, teachers, parents, and corporate employees. The application will leverage React TSX for the frontend, integrate AI-driven personalization, and feature a futuristic UI/UX that is 5 years ahead of current standards.
+
+### 3.2 Scope
 The application will be a web-based platform with the following core functionalities:
 
-Separate user roles and authentication for school students, teachers, parents, corporate employees, and admins.
-Personalized video courses and e-books based on user profiles and learning progress.
-Role-based access control, privacy enforcement, and progress tracking.
-Futuristic design and seamless user experience.
-1.3 Target Audience
-School Students: Learners from various grade levels.
-School Teachers and Parents: Educators and guardians monitoring student progress.
-Corporate Employees: Professionals seeking mathematics education tailored to their departments.
-School and Corporate Admins: Administrators managing users and content.
-Application Admin: Oversees the entire platform, including admin assignments and content distribution.
-2. Objectives
-2.1 Business Objectives
-Provide a cutting-edge educational tool that enhances mathematics learning for schools and corporates.
-Increase user engagement through personalized, AI-driven content and interactive features.
-Ensure scalability and maintainability for future expansions (e.g., additional subjects, mobile support).
-2.2 User Objectives
-Deliver tailor-made learning experiences based on individual skills and roles.
-Offer a secure, private, and user-friendly interface with no cross-visibility between users.
-Provide tools for tracking progress, scheduling, and recommending courses.
-3. Functional Requirements
-3.1 User Authentication and Access Control
-Separate Sign-Up/Login:
-Distinct portals for school students and corporate employees.
-Only school and corporate admins can initially sign up for the service.
-Admin Privileges:
-School admins can add students, teachers, parents, and employees based on grade levels/standards.
-Corporate admins can sign up employees based on departments.
-Application admin can sign up school/corporate admins via the backend.
-Email Notification: All users receive an email with a unique login link.
-Role-Based Access Control (RBAC):
-Create roles (e.g., student, teacher, parent, employee, admin) and assign specific screen/module access.
-School admins can create sub-roles for teachers to manage students.
-No visibility between users (e.g., students cannot see other students' progress; employees cannot see other employees' courses).
-3.2 Content and Personalization
-Tailored Courses:
-Post-login, AI generates personalized video courses for each user.
-School courses vary by grade level/standard.
-Corporate courses vary by department (e.g., finance, engineering).
-Content Delivery:
-High-quality video player for courses.
-E-book integration for supplementary materials.
-AI Recommendations:
-Based on learning skills and interactive exam results, AI suggests additional content or course adjustments.
-Content Management:
-Application admin assigns content/courses for schools, students, and corporate employees.
-School teachers can prescribe courses to students.
-3.3 Progress and Engagement Tracking
-Learning Progress: Display individual progress within the application.
-Scheduling: Show upcoming calendars, exam schedules, and milestones.
-Interactive Assessments: Include quizzes and exams to assess understanding and adapt content.
-3.4 Privacy and Security
-Ensure data privacy with strict role-based access and encryption.
-Comply with educational and corporate data protection standards (e.g., GDPR, FERPA).
-Prevent unauthorized access and ensure no cross-user visibility.
-4. Non-Functional Requirements
-4.1 Performance
-The application must handle at least 10,000 concurrent users with minimal latency (under 2 seconds for page loads).
-Scalable architecture to support future growth.
-4.2 Usability
-Intuitive, futuristic UI/UX design, 5 years ahead of current standards.
-Responsive design for desktop and tablet devices.
-Accessibility compliance (e.g., WCAG 2.1).
-4.3 Security
-Secure authentication (e.g., OAuth, JWT).
-Data encryption for user information and content.
-Regular security audits and updates.
-4.4 Maintainability
-Modular code structure for easy updates and expansions.
-Comprehensive documentation and version control.
-5. Technical Requirements
-5.1 Technology Stack
-Frontend: React TSX for a type-safe, scalable UI.
-Backend: Node.js with Express (or similar) for API development.
-Database: PostgreSQL (or similar relational database) for user data and course management.
-Storage: Cloud storage (e.g., AWS S3) for videos and e-books.
-AI Integration: Leverage AI tools for personalization, recommendations, and progress tracking.
-DevOps: Docker for containerization, CI/CD pipelines for deployment.
-5.2 Integration
-Email service for user notifications (e.g., SendGrid, Mailgun).
-Analytics tools to track user engagement and system performance.
-6. User Interface and Design Guidelines
-6.1 Design Vision
-Futuristic, clean, and minimalist design, at least 5 years ahead of current UI trends.
-Interactive elements, smooth animations, and high-contrast visuals for engagement.
-Consistent branding with a focus on mathematics (e.g., geometric patterns, educational motifs).
-6.2 Key Screens
-Login/Sign-Up Pages: Separate portals for students, employees, and admins.
-Dashboard: Personalized dashboard showing courses, progress, and schedules.
-Course Player: High-quality video player with controls, captions, and e-book links.
-Admin Panel: Role management, user addition, and content assignment.
-Progress Tracker: Visual representation of learning milestones and upcoming events.
-7. Success Criteria
-7.1 Launch Metrics
-90% user satisfaction rate based on post-launch surveys.
-80% adoption rate among target users within the first 3 months.
-Zero critical security incidents in the first 6 months.
-7.2 Long-Term Goals
-Expand to mobile applications and additional subjects.
-Achieve 500,000 active users within 2 years.
-Continuous improvement based on user feedback and AI-driven insights.
+- Separate user roles and authentication for school students, teachers, parents, corporate employees, and admins
+- Personalized video courses and e-books based on user profiles and learning progress
+- Role-based access control, privacy enforcement, and progress tracking
+- Futuristic design and seamless user experience
 
+### 3.3 Target Audience
+- **School Students**: Learners from various grade levels
+- **School Teachers and Parents**: Educators and guardians monitoring student progress
+- **Corporate Employees**: Professionals seeking mathematics education tailored to their departments
+- **School and Corporate Admins**: Administrators managing users and content
+- **Application Admin**: Oversees the entire platform, including admin assignments and content distribution
+
+### 3.4 Functional Requirements
+
+#### 3.4.1 User Authentication and Access Control
+- **Separate Sign-Up/Login**: Distinct portals for school students and corporate employees
+- **Admin Privileges**: 
+  - Only school and corporate admins can initially sign up for the service
+  - School admins can add students, teachers, parents, and employees based on grade levels/standards
+  - Corporate admins can sign up employees based on departments
+  - Application admin can sign up school/corporate admins via the backend
+- **Email Notification**: All users receive an email with a unique login link
+- **Role-Based Access Control (RBAC)**:
+  - Create roles (e.g., student, teacher, parent, employee, admin) and assign specific screen/module access
+  - School admins can create sub-roles for teachers to manage students
+  - No visibility between users (e.g., students cannot see other students' progress; employees cannot see other employees' courses)
+
+#### 3.4.2 Content and Personalization
+- **Tailored Courses**: 
+  - Post-login, AI generates personalized video courses for each user
+  - School courses vary by grade level/standard
+  - Corporate courses vary by department (e.g., finance, engineering)
+- **Content Delivery**:
+  - High-quality video player for courses
+  - E-book integration for supplementary materials
+- **AI Recommendations**: Based on learning skills and interactive exam results, AI suggests additional content or course adjustments
+- **Content Management**:
+  - Application admin assigns content/courses for schools, students, and corporate employees
+  - School teachers can prescribe courses to students
+
+#### 3.4.3 Progress and Engagement Tracking
+- Learning Progress: Display individual progress within the application
+- Scheduling: Show upcoming calendars, exam schedules, and milestones
+- Interactive Assessments: Include quizzes and exams to assess understanding and adapt content
+
+#### 3.4.4 Privacy and Security
+- Ensure data privacy with strict role-based access and encryption
+- Comply with educational and corporate data protection standards (e.g., GDPR, FERPA)
+- Prevent unauthorized access and ensure no cross-user visibility
+
+### 3.5 Non-Functional Requirements
+
+#### 3.5.1 Performance
+- The application must handle at least 10,000 concurrent users with minimal latency (under 2 seconds for page loads)
+- Scalable architecture to support future growth
+
+#### 3.5.2 Usability
+- Intuitive, futuristic UI/UX design, 5 years ahead of current standards
+- Responsive design for desktop and tablet devices
+- Accessibility compliance (e.g., WCAG 2.1)
+
+#### 3.5.3 Security
+- Secure authentication (e.g., OAuth, JWT)
+- Data encryption for user information and content
+- Regular security audits and updates
+
+#### 3.5.4 Maintainability
+- Modular code structure for easy updates and expansions
+- Comprehensive documentation and version control
+
+### 3.6 User Interface and Design Guidelines
+
+#### 3.6.1 Design Vision
+- Futuristic, clean, and minimalist design, at least 5 years ahead of current UI trends
+- Interactive elements, smooth animations, and high-contrast visuals for engagement
+- Consistent branding with a focus on mathematics (e.g., geometric patterns, educational motifs)
+
+#### 3.6.2 Key Screens
+- **Login/Sign-Up Pages**: Separate portals for students, employees, and admins
+- **Dashboard**: Personalized dashboard showing courses, progress, and schedules
+- **Course Player**: High-quality video player with controls, captions, and e-book links
+- **Admin Panel**: Role management, user addition, and content assignment
+- **Progress Tracker**: Visual representation of learning milestones and upcoming events
+
+### 3.7 Success Criteria
+
+#### 3.7.1 Launch Metrics
+- 90% user satisfaction rate based on post-launch surveys
+- 80% adoption rate among target users within the first 3 months
+- Zero critical security incidents in the first 6 months
+
+#### 3.7.2 Long-Term Goals
+- Expand to mobile applications and additional subjects
+- Achieve 500,000 active users within 2 years
+- Continuous improvement based on user feedback and AI-driven insights
+
+### 3.8 Current Development Status
+**Status**: UI Development Phase
+- **Focus**: Frontend-only development
+- **Backend**: Not required in initial phase
+- **Database**: PostgreSQL integration planned for future phases
+
+---
+
+## 4. LearnLoop - Course Creation & Management System
+
+### 4.1 Overview
+LearnLoop is a comprehensive course creation and management system that enables content creators to build, manage, and publish online courses. The system provides a multi-step course builder with advanced features including curriculum management, drip content, certificates, and payment integration.
+
+### 4.2 Core Features
+
+#### 4.2.1 Course Builder - Multi-Step Process
+The course builder follows a 7-step process:
+
+1. **Course Details** - Basic course information
+2. **Curriculum** - Module and lesson management
+3. **Drip Content** - Progressive content release (In Development)
+4. **Certificate** - Certificate generation and customization
+5. **Payment Details** - Pricing and payment configuration
+6. **Additional Details** - Extra course metadata
+7. **Preview & Publish** - Final review and publication
+
+#### 4.2.2 Course Management Dashboard
+A comprehensive dashboard for managing all courses with features including:
+- Course listing with filters and search
+- Status management (Draft, Published, Live & Selling, Paused, Archived)
+- Quick actions (Edit, Preview, Delete, Duplicate)
+- Analytics and metrics display
+- Bulk operations
+
+### 4.3 Completed Features
+
+#### ✅ 4.3.1 Course Details Step
+**Status**: Fully Implemented
+
+**Features**:
+- Course title and subtitle input
+- Rich text description editor
+- Cover image upload with preview
+- Category selection (Business, Technology, Design, Marketing, Personal Development, Health, Other)
+- Level selection (Beginner, Intermediate, Advanced, NA)
+- Language selection (English, Hindi, Spanish, French, German, Other)
+- Tags management (multi-select with custom tags)
+- Visibility settings (Public, Unlisted, Private)
+- Form validation and error handling
+- Auto-save functionality
+
+**Technical Implementation**:
+- Component: `CourseDetailsStep.tsx`
+- State management in `CourseBuilderPage.tsx`
+- Image upload handling with preview
+- Tag input with chip display
+- Form validation with error messages
+
+#### ✅ 4.3.2 Curriculum Step
+**Status**: Fully Implemented
+
+**Features**:
+- **Module Management**:
+  - Add, edit, delete modules
+  - Module title and description
+  - Module reordering (drag and drop or arrow buttons)
+  - Module expansion/collapse
+  
+- **Lesson Management**:
+  - Add, edit, delete lessons within modules
+  - Lesson types supported:
+    - **Video**: Video upload with thumbnail, transcript support
+    - **Text**: Rich text content
+    - **Audio**: Audio file upload with waveform visualization
+    - **Quiz**: Multiple choice questions (single/multiple answer)
+    - **Assignment**: File submission with instructions
+    - **Live**: Live session with meeting links (Google Meet, Zoom, Webex)
+  - Lesson reordering within modules
+  - Lesson duration tracking
+  - Pre-class and post-class messages for live lessons
+  - Resource attachments for lessons
+  
+- **Quiz Editor**:
+  - Question creation with multiple choice options
+  - Single or multiple correct answers
+  - Points assignment
+  - Explanation fields
+  
+- **File Upload**:
+  - Video upload with progress tracking
+  - Audio upload with waveform generation
+  - Image upload for thumbnails
+  - Resource file attachments
+  - File type validation
+  - File size limits
+
+**Technical Implementation**:
+- Component: `CurriculumStep.tsx`
+- Quiz editor component: `QuizQuestionEditor.tsx`
+- Upload service: `uploadService.ts`
+- State management for modules and lessons
+- Drag and drop functionality
+- File upload with progress tracking
+
+#### ✅ 4.3.3 Certificate Step
+**Status**: Fully Implemented
+
+**Features**:
+- Certificate enable/disable toggle
+- Template selection (multiple certificate templates)
+- Certificate title customization
+- Certificate description customization
+- Completion percentage requirement
+- Application logo toggle
+- Signature management:
+  - Add multiple signatures
+  - Upload or draw signatures
+  - Signature name and designation
+  - Enable/disable individual signatures
+  - Default signature selection
+- Creator logo upload
+- Preview functionality
+
+**Technical Implementation**:
+- Component: `CertificateStep.tsx`
+- Signature management with image upload/draw
+- Template preview system
+- Logo upload handling
+
+#### ✅ 4.3.4 Payment Details Step
+**Status**: Fully Implemented
+
+**Features**:
+- Pricing configuration:
+  - Listed price (INR, USD, EUR)
+  - Selling price (INR, USD, EUR)
+  - Discount calculation
+- Payment method selection
+- Installment options
+- Affiliate program settings
+- Revenue sharing configuration
+
+**Technical Implementation**:
+- Component: `PaymentDetailsStep.tsx`
+- Multi-currency support
+- Price calculation logic
+
+#### ✅ 4.3.5 Additional Details Step
+**Status**: Fully Implemented
+
+**Features**:
+- FAQ management (add, edit, delete)
+- Course prerequisites
+- Learning objectives
+- Target audience
+- Course requirements
+- Additional metadata fields
+
+**Technical Implementation**:
+- Component: `AdditionalDetailsStep.tsx`
+- Dynamic FAQ management
+- Rich text support for descriptions
+
+#### ✅ 4.3.6 Preview & Publish Step
+**Status**: Fully Implemented
+
+**Features**:
+- Complete course preview:
+  - Course overview with all details
+  - Curriculum preview with expandable modules/lessons
+  - Certificate preview
+  - Pricing information
+  - FAQ display
+- Course ID display (formatted: C-{creator initials}-{number})
+- Publish functionality:
+  - Status change to "Published"
+  - Validation before publishing
+  - Success confirmation
+- Save as draft option
+- Back to edit navigation
+
+**Technical Implementation**:
+- Component: `PreviewPublishStep.tsx`
+- Course data aggregation
+- Preview rendering
+- Publish API integration
+
+#### ✅ 4.3.7 Course Management Dashboard
+**Status**: Fully Implemented
+
+**Features**:
+- **Course Listing**:
+  - Table view with pagination
+  - Sortable columns
+  - Search functionality
+  - Advanced filters:
+    - Status filter (Draft, Published, Live & Selling, Paused, Archived)
+    - Type filter (Free, Paid, Invite Only)
+    - Visibility filter (Public, Unlisted, Private)
+    - Drip filter (Enabled/Disabled)
+    - Date range filter
+  
+- **Course Information Display**:
+  - Course ID (formatted display)
+  - Course name
+  - Creation date
+  - Last updated date (with time)
+  - Status badges with color coding
+  - Type indicators
+  - Enrollment count
+  - Completion rate
+  - Visibility indicators
+  - Feature indicators (Certificate, Drip, Affiliate)
+  
+- **Actions Menu**:
+  - Edit: Navigate to course builder
+  - Preview: Direct navigation to Preview & Publish step
+  - Delete: With confirmation dialog
+  - Duplicate: Copy course functionality
+  - Pause/Resume: Status management
+  - Analytics: View course analytics (planned)
+  
+- **Bulk Operations**:
+  - Select multiple courses
+  - Bulk status changes
+  - Bulk delete (with confirmation)
+  
+- **Refresh Functionality**:
+  - Manual refresh button
+  - Auto-refresh on navigation back
+
+**Technical Implementation**:
+- Component: `LearnLoopCourseManager.tsx`
+- Course service integration
+- Table with Material-UI components
+- Filter and search logic
+- Action menu with confirmation dialogs
+
+#### ✅ 4.3.8 Data Persistence & Backend Integration
+**Status**: Fully Implemented
+
+**Features**:
+- **Auto-Save**:
+  - Automatic draft saving every 10 seconds
+  - Manual save button
+  - Unsaved changes detection
+  - Save before navigation warning
+  
+- **Course ID Generation**:
+  - Format: C-{first 3 letters of creator name}-{sequential number}
+  - Example: C-ADM-0001
+  - Automatic generation on first save
+  - Display in Preview & Publish step
+  - Display in Course Management table
+  
+- **Data Flow**:
+  - Frontend state management
+  - Payload preparation (`buildDraftPayload`)
+  - API integration (`courseService.saveDraft`)
+  - Backend validation and processing
+  - MongoDB Atlas storage
+  - Response handling and state updates
+  
+- **Course Loading**:
+  - Load existing course for editing
+  - Map backend data to frontend state
+  - Handle missing fields with defaults
+  - Error handling and loading states
+
+**Technical Implementation**:
+- Service: `courseService.ts`
+- Controller: `courseController.js`
+- Model: `Course.js` (MongoDB schema)
+- Auto-save logic in `CourseBuilderPage.tsx`
+- Data mapping and transformation
+
+#### ✅ 4.3.9 Module & Lesson Content Structure
+**Status**: Fully Implemented
+
+**Backend Schema**:
+- **Module Schema**:
+  - Title, description
+  - Order
+  - Lessons array
+  - isUnlocked, unlockDate (for drip content)
+  
+- **Lesson Schema**:
+  - Title, description
+  - Type (Video, Text, Audio, Quiz, Assignment, Live)
+  - Duration
+  - Order
+  - Content (type-specific):
+    - Video: videoUrl, thumbnailUrl, transcript
+    - Text: textContent
+    - Audio: audioUrl, audioFiles, waveformData
+    - Quiz: questions, timeLimit, passingScore
+    - Assignment: instructions, submissionType, maxFileSize, allowedFileTypes
+    - Live: meetingLink, meetingPlatform, startDateTime, endDateTime, preClassMessage, postClassMessage
+  - Resources array
+  - isUnlocked, unlockDate
+
+**Data Mapping**:
+- Frontend lesson structure → Backend content structure
+- Video files → videoUrl and thumbnailUrl
+- Audio files → audioUrl and audioFiles array
+- Quiz questions → questions array with options
+- Assignment fields → content.instructions and content.submissionType
+- Live lesson fields → content.meetingLink, content.meetingPlatform, etc.
+
+### 4.4 In Development Features
+
+#### 🔄 4.4.1 Drip Content (Progressive Content Release)
+**Status**: Strategy Defined, Implementation Pending
+
+**Overview**:
+Drip Content allows course creators to progressively release course modules based on time, enrollment date, specific dates, or completion of previous modules. This feature enhances learner engagement and ensures structured learning progression.
+
+**Release Methods**:
+
+1. **Instant Access**:
+   - Module is unlocked immediately upon enrollment
+   - Use case: First module or introductory content
+   - Logic: `isUnlocked = true` immediately, `unlockDate = null`
+
+2. **Time-Based Release**:
+   - Module unlocks X days after enrollment
+   - Use case: Weekly content release, spaced learning
+   - Logic: `unlockDate = enrollmentDate + X days`
+   - Check: `currentDate >= unlockDate`
+
+3. **Date-Based Release**:
+   - Module unlocks on a specific date and time
+   - Use case: Scheduled launches, cohort-based courses
+   - Logic: `unlockDate = specific date/time`
+   - Check: `currentDate >= unlockDate`
+
+4. **Completion-Based Release**:
+   - Module unlocks when a prerequisite module is completed within X days
+   - Use case: Sequential learning, mastery-based progression
+   - Logic:
+     - Prerequisite: Module A must be completed
+     - Time Window: Must complete within X days (optional)
+     - Check: `prerequisiteModule.isCompleted = true` AND `completionDate <= (prerequisiteModule.unlockDate + X days)`
+
+**Content Visibility Strategy**:
+
+1. **Module Titles Only**:
+   - Show only module titles, hide all lessons
+   - Display: Module title, description (if not hidden), unlock date (unless hidden)
+   - Lessons: Completely hidden
+
+2. **Full Module Preview**:
+   - Show module title and all lesson titles
+   - Display: Module title, description, all lesson titles, lesson descriptions
+   - Lessons: Titles visible but content locked (not accessible)
+   - Unlock date shown (unless hidden)
+
+3. **Complete Hide**:
+   - Hide module completely until unlocked
+   - Display: Module not visible in course structure
+   - Appears only when unlocked
+
+**Advanced Configuration**:
+
+1. **Hide Release Timelines**:
+   - Conceal unlock dates from learners for enhanced suspense
+   - When enabled: Don't show unlock dates anywhere
+   - Still calculate unlock dates internally
+
+2. **Automated Notifications**:
+   - Send email alerts when new content becomes available
+   - Trigger: When a module becomes unlocked for a user
+   - Content: Course name, module title, unlock message, direct link
+
+**Data Structure**:
+
+**Frontend**:
+```typescript
+interface DripMethod {
+  id: string;                    // Module ID
+  method: 'immediate' | 'days' | 'date' | 'completion';
+  action?: string | number;      // Days (number) or Date (string) or completion config
+  prerequisiteModuleId?: string; // For completion-based
+  completionWindowDays?: number; // For completion-based
+}
+
+interface DripContentConfig {
+  dripEnabled: boolean;
+  dripMethods: DripMethod[];
+  dripDisplayOption: 'title' | 'titleAndLessons' | 'hide';
+  dripHideUnlockDate: boolean;
+  dripSendCommunication: boolean;
+}
+```
+
+**Backend Schema** (to be updated):
+```javascript
+const dripMethodSchema = new mongoose.Schema({
+  moduleId: { type: String, required: true },
+  method: { 
+    type: String, 
+    enum: ['immediate', 'days', 'date', 'completion'],
+    required: true 
+  },
+  action: mongoose.Schema.Types.Mixed, // number (days) or string (date ISO) or undefined
+  unlockDate: Date, // calculated for 'date' method
+  prerequisiteModuleId: String, // For 'completion' method
+  completionWindowDays: Number // For 'completion' method (optional)
+}, { _id: false });
+```
+
+**Implementation Plan**:
+
+**Phase 1: Frontend - DripContentStep Component**
+- Update component to accept props from parent
+- Remove hardcoded state
+- Add completion-based method option
+- Add prerequisite module selector
+- Add completion window input
+- Sync drip methods with modules dynamically
+
+**Phase 2: Connect to CourseBuilderPage**
+- Add drip content state variables
+- Pass props to DripContentStep
+- Sync drip methods when modules change
+- Load drip content when editing course
+
+**Phase 3: Data Persistence**
+- Include drip content in buildDraftPayload
+- Update backend schema
+- Validate drip methods on save
+- Calculate initial module states
+
+**Phase 4: Backend Processing**
+- Validate drip methods (circular dependencies, valid modules)
+- Calculate unlock dates on save
+- Update module isUnlocked and unlockDate
+
+**Phase 5: Preview Integration**
+- Update PreviewPublishStep to show drip content
+- Display drip methods with module titles
+- Show visibility and advanced settings
+
+**Phase 6: Runtime Logic (For Learner View)**
+- Create dripContentService.js
+- Calculate unlock status based on enrollment date and progress
+- Apply visibility filtering
+- Integrate with course display API
+
+**Current Status**:
+- ✅ UI Component exists (`DripContentStep.tsx`) but is isolated
+- ✅ Backend schema partially defined (needs completion method support)
+- ⏳ Integration with CourseBuilderPage pending
+- ⏳ Data persistence pending
+- ⏳ Runtime logic pending
+
+### 4.5 Technical Implementation Details
+
+#### 4.5.1 Course Builder Architecture
+
+**Component Structure**:
+```
+CourseBuilderPage.tsx (Main Container)
+├── StepperRail (Step Navigation)
+├── StepLabelBox (Current Step Display)
+├── GlassPanel (Content Area)
+│   ├── CourseDetailsStep
+│   ├── CurriculumStep
+│   │   └── QuizQuestionEditor
+│   ├── DripContentStep (Lazy Loaded)
+│   ├── CertificateStep (Lazy Loaded)
+│   ├── PaymentDetailsStep (Lazy Loaded)
+│   ├── AdditionalDetailsStep (Lazy Loaded)
+│   └── PreviewPublishStep
+└── Navigation Controls
+```
+
+**State Management**:
+- All course data managed in `CourseBuilderPage.tsx`
+- Props passed down to step components
+- Callbacks for state updates
+- Auto-save on state changes
+- Unsaved changes tracking
+
+**Navigation**:
+- Step-based navigation with validation
+- Keyboard shortcuts (Arrow keys, Enter, Escape)
+- Direct navigation to Preview step from Course Manager
+- Back navigation with save warning
+
+#### 4.5.2 Data Flow
+
+**Save Flow**:
+```
+User Input → State Update → buildDraftPayload() → courseService.saveDraft() 
+→ POST /api/courses/:id/draft → courseController.saveDraft() 
+→ MongoDB Atlas → Response → State Update → UI Feedback
+```
+
+**Load Flow**:
+```
+Course ID → courseService.getCourse() → GET /api/courses/:id 
+→ courseController.getCourseById() → MongoDB Atlas 
+→ Response → State Mapping → UI Rendering
+```
+
+#### 4.5.3 File Upload System
+
+**Upload Service** (`uploadService.ts`):
+- Handles video, audio, image, and document uploads
+- Progress tracking
+- File type validation
+- File size limits
+- Error handling
+- URL generation for uploaded files
+
+**Supported File Types**:
+- Videos: MP4, WebM, MOV
+- Audio: MP3, WAV, OGG
+- Images: JPG, PNG, GIF, WebP
+- Documents: PDF, DOC, DOCX
+
+#### 4.5.4 Course ID Generation
+
+**Format**: `C-{creator initials}-{sequential number}`
+- Creator initials: First 3 letters of creator's name (uppercase)
+- Sequential number: Zero-padded 4-digit number (0001, 0002, etc.)
+- Example: `C-ADM-0001`, `C-JOH-0042`
+
+**Generation Logic**:
+- Triggered on first save of new course
+- Backend generates using static method `Course.generateCourseId()`
+- Checks for uniqueness
+- Increments number if duplicate found
+- Stored in `courseId` field (separate from MongoDB `_id`)
+
+#### 4.5.5 Auto-Save System
+
+**Implementation**:
+- Auto-save every 10 seconds when there are unsaved changes
+- Manual save button always available
+- Save before navigation warning
+- Silent saves (no toast notification)
+- Manual saves show success notification
+
+**Unsaved Changes Detection**:
+- Tracks changes to all course fields
+- Sets `hasUnsavedChanges.current = true` on any change
+- Resets to `false` after successful save
+- Warns user before navigation if unsaved changes exist
+
+### 4.6 API Endpoints
+
+#### Course Management
+- `GET /api/courses` - Get all courses for instructor
+- `GET /api/courses/:id` - Get course by ID
+- `POST /api/courses/draft` - Create new course draft
+- `POST /api/courses/:id/draft` - Update course draft
+- `POST /api/courses/:id/publish` - Publish course
+- `DELETE /api/courses/:id` - Delete course
+
+#### File Upload
+- `POST /api/upload/video` - Upload video file
+- `POST /api/upload/audio` - Upload audio file
+- `POST /api/upload/image` - Upload image file
+- `POST /api/upload/document` - Upload document file
+
+### 4.7 Database Schema
+
+#### Course Document Structure
+```javascript
+{
+  _id: ObjectId,
+  courseId: String, // C-ADM-0001 format
+  name: String,
+  subtitle: String,
+  description: String,
+  coverImage: String,
+  instructor: ObjectId (ref: User),
+  category: String,
+  level: String,
+  language: String,
+  tags: [String],
+  visibility: String,
+  modules: [ModuleSchema],
+  duration: Number,
+  dripEnabled: Boolean,
+  dripMethods: [DripMethodSchema],
+  dripDisplayOption: String,
+  dripHideUnlockDate: Boolean,
+  dripSendCommunication: Boolean,
+  certificateEnabled: Boolean,
+  certificateTemplate: String,
+  certificateTitle: String,
+  certificateDescription: String,
+  completionPercentage: Number,
+  applicationLogoEnabled: Boolean,
+  certificateSignatures: [SignatureSchema],
+  certificateCreatorLogo: String,
+  listedPrice: { INR: Number, USD: Number, EUR: Number },
+  sellingPrice: { INR: Number, USD: Number, EUR: Number },
+  status: String,
+  createdAt: Date,
+  updatedAt: Date,
+  lastUpdated: Date
+}
+```
+
+### 4.8 Known Issues & Resolutions
+
+#### ✅ Resolved Issues
+
+1. **Course ID Display**:
+   - **Issue**: Course ID not showing in Preview & Publish step for draft courses
+   - **Resolution**: Added courseId prop to PreviewPublishStep, display formatted ID
+
+2. **Course ID Format**:
+   - **Issue**: Showing MongoDB ObjectId instead of formatted ID (C-ADM-0001)
+   - **Resolution**: Updated courseService to prioritize courseId field, display in formatted manner
+
+3. **Preview Navigation**:
+   - **Issue**: Preview action in Course Manager navigated to course edit instead of Preview step
+   - **Resolution**: Updated navigation to include step=6 query parameter, added preview mode logic
+
+4. **Last Updated Column**:
+   - **Issue**: Last Updated column showing old values
+   - **Resolution**: Explicitly set lastUpdated in backend on save, added refresh mechanism, updated sort order
+
+5. **Curriculum Persistence**:
+   - **Issue**: Video content not persisting in MongoDB Atlas
+   - **Resolution**: Ensured modules array explicitly included in $set operator, added debug logging
+
+#### 🔄 Pending Issues
+
+1. **Drip Content Integration**: Not yet connected to CourseBuilderPage state
+2. **Completion-Based Drip**: Backend schema needs update for completion method
+3. **Email Notifications**: Not yet implemented for drip content unlocks
+
+---
+
+## 5. Technical Architecture
+
+### 5.1 Frontend Architecture
+
+#### 5.1.1 Component Structure
+- **Pages**: Top-level route components
+- **Components**: Reusable UI components
+- **Services**: API communication layer
+- **Hooks**: Custom React hooks for shared logic
+- **Types**: TypeScript type definitions
+- **Utils**: Utility functions
+
+#### 5.1.2 State Management
+- React Context API for global state (auth, user)
+- Local state with useState for component-specific data
+- useRef for mutable values that don't trigger re-renders
+- Custom hooks for complex state logic
+
+#### 5.1.3 Routing
+- React Router v6 for client-side routing
+- Protected routes with authentication checks
+- Nested routes for complex navigation
+- Query parameters for state preservation
+
+### 5.2 Backend Architecture
+
+#### 5.2.1 MVC Pattern
+- **Models**: MongoDB schemas with Mongoose
+- **Controllers**: Request handling and business logic
+- **Routes**: API endpoint definitions
+- **Middleware**: Authentication, validation, error handling
+
+#### 5.2.2 Database Design
+- MongoDB Atlas for cloud database
+- Mongoose ODM for schema definition
+- Embedded documents for related data (modules, lessons)
+- References for user relationships
+
+#### 5.2.3 Security
+- JWT-based authentication
+- Role-based access control
+- Input validation and sanitization
+- File upload security (type, size validation)
+- CORS configuration
+
+### 5.3 File Storage
+
+#### 5.3.1 Current Implementation
+- Local file system storage
+- Organized directory structure:
+  - `/uploads/videos/`
+  - `/uploads/audio/`
+  - `/uploads/images/`
+  - `/uploads/documents/`
+- File naming with timestamps and unique IDs
+
+#### 5.3.2 Future Plans
+- Migration to cloud storage (AWS S3)
+- CDN integration for media delivery
+- Image optimization and resizing
+- Video transcoding for multiple formats
+
+---
+
+## 6. Development Status
+
+### 6.1 Completed Features
+
+#### ✅ Core Infrastructure
+- User authentication and authorization
+- Role-based access control
+- File upload system
+- API service layer
+- Error handling and validation
+- Toast notifications
+
+#### ✅ LearnLoop - Course Builder
+- Course Details step (100%)
+- Curriculum step (100%)
+- Certificate step (100%)
+- Payment Details step (100%)
+- Additional Details step (100%)
+- Preview & Publish step (100%)
+- Course Management Dashboard (100%)
+- Auto-save functionality (100%)
+- Course ID generation (100%)
+- Data persistence (100%)
+
+#### ✅ LearnLoop - Backend
+- Course model and schema (100%)
+- Course CRUD operations (100%)
+- File upload endpoints (100%)
+- Course ID generation logic (100%)
+- Data validation (100%)
+
+### 6.2 In Development
+
+#### 🔄 LearnLoop - Drip Content
+- UI Component: 50% (exists but isolated)
+- Integration: 0% (pending)
+- Backend Schema: 70% (needs completion method)
+- Runtime Logic: 0% (pending)
+
+### 6.3 Planned Features
+
+#### 📋 LearnLoop
+- Email notifications for drip content
+- Course analytics dashboard
+- Student enrollment management
+- Progress tracking
+- Certificate generation and download
+- Payment gateway integration
+- Affiliate program management
+
+#### 📋 Ansatz
+- User authentication UI
+- Dashboard components
+- Course player
+- Progress tracking
+- Assessment system
+- Admin panel
+
+---
+
+## 7. Future Roadmap
+
+### 7.1 Q1 2025
+
+#### LearnLoop Enhancements
+- Complete Drip Content implementation
+- Email notification system
+- Course analytics
+- Student management
+- Certificate generation
+
+#### Ansatz Development
+- Complete UI components
+- Backend API development
+- Database integration
+- User authentication flow
+- Content management system
+
+### 7.2 Q2 2025
+
+#### Platform Integration
+- Unified user management
+- Cross-platform features
+- Shared content library
+- Analytics dashboard
+
+#### Advanced Features
+- AI-powered recommendations
+- Advanced analytics
+- Mobile app development
+- Third-party integrations
+
+### 7.3 Q3-Q4 2025
+
+#### Scale and Optimize
+- Performance optimization
+- Advanced security features
+- Enterprise features
+- International expansion
+- API marketplace
+
+---
+
+## 8. Success Metrics
+
+### 8.1 LearnLoop Metrics
+- **Course Creation**: Target 100+ courses created in first month
+- **User Engagement**: 80% of creators complete course setup
+- **Feature Adoption**: 70% of courses use drip content
+- **Publishing Rate**: 60% draft-to-published conversion
+
+### 8.2 Ansatz Metrics
+- **User Adoption**: 80% adoption rate among target users
+- **User Satisfaction**: 90% satisfaction rate
+- **Content Completion**: 70% course completion rate
+- **Security**: Zero critical security incidents
+
+### 8.3 Platform Metrics
+- **Performance**: < 2 seconds page load time
+- **Uptime**: 99.9% availability
+- **Scalability**: Support 10,000+ concurrent users
+- **Error Rate**: < 0.1% error rate
+
+---
+
+## 9. Risk Assessment
+
+### 9.1 Technical Risks
+- **Scalability**: Database performance under load
+- **File Storage**: Storage costs and management
+- **Integration Complexity**: Third-party service dependencies
+- **Performance**: Slow response times during peak usage
+
+### 9.2 Business Risks
+- **User Adoption**: Slow user growth and engagement
+- **Feature Complexity**: Overwhelming user experience
+- **Competition**: Established players in the market
+- **Regulatory**: Compliance with data protection laws
+
+### 9.3 Mitigation Strategies
+- **Proactive Monitoring**: Real-time system health monitoring
+- **User Feedback**: Continuous user research and feedback
+- **Agile Development**: Iterative development and quick response
+- **Security Audits**: Regular security assessments
+
+---
+
+## 10. Conclusion
+
+The Creator Marketplace Platform represents a comprehensive solution for content creation and education. With LearnLoop's course creation system largely complete and Ansatz's UI development in progress, the platform is well-positioned for growth.
+
+### Key Achievements
+1. **LearnLoop Course Builder**: Fully functional 7-step course creation process
+2. **Course Management**: Comprehensive dashboard with advanced features
+3. **Data Persistence**: Robust backend integration with MongoDB Atlas
+4. **User Experience**: Intuitive UI with auto-save and validation
+
+### Next Steps
+1. **Complete Drip Content**: Finish implementation and integration
+2. **Ansatz Backend**: Develop API and database integration
+3. **Analytics**: Implement tracking and reporting
+4. **Mobile**: Begin mobile app development
+
+The platform's success will be measured by user adoption, engagement, and business metrics, with continuous improvement based on user feedback and market demands.
+
+---
+
+## Appendix A: File Structure
+
+### Frontend
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── learnloop/
+│   │   │   ├── CourseBuilderPage.tsx
+│   │   │   ├── CourseDetailsStep.tsx
+│   │   │   ├── CurriculumStep.tsx
+│   │   │   ├── DripContentStep.tsx
+│   │   │   ├── CertificateStep.tsx
+│   │   │   ├── PaymentDetailsStep.tsx
+│   │   │   ├── AdditionalDetailsStep.tsx
+│   │   │   ├── PreviewPublishStep.tsx
+│   │   │   ├── LearnLoopCourseManager.tsx
+│   │   │   └── QuizQuestionEditor.tsx
+│   │   └── ...
+│   ├── services/
+│   │   ├── courseService.ts
+│   │   ├── uploadService.ts
+│   │   └── ...
+│   ├── types/
+│   │   ├── course.ts
+│   │   └── ...
+│   └── ...
+```
+
+### Backend
+```
+backend/
+├── src/
+│   ├── models/
+│   │   ├── Course.js
+│   │   └── ...
+│   ├── controllers/
+│   │   ├── courseController.js
+│   │   └── ...
+│   ├── routes/
+│   │   ├── courseRoutes.js
+│   │   └── ...
+│   └── ...
+└── docs/
+    ├── PRD.md
+    ├── SAVE_DRAFT_FLOW.md
+    ├── CURRICULUM_STORAGE.md
+    └── ...
+```
+
+---
+
+## Appendix B: Key Technologies
+
+### Frontend
+- React 18.2.0
+- TypeScript 4.9.5
+- Material-UI (MUI) 5.14.0
+- React Router 6.8.0
+- Axios 1.3.0
+- Framer Motion 10.12.0
+
+### Backend
+- Node.js 18.x
+- Express.js 4.18.0
+- MongoDB 6.0
+- Mongoose 7.0.0
+- JWT 9.0.0
+- Multer 1.4.5
+
+---
+
+**Document Version**: 2.0
+**Last Updated**: December 2024
+**Next Review**: January 2025

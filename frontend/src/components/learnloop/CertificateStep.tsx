@@ -3,10 +3,6 @@ import {
   Box,
   Typography,
   Switch,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   TextField,
   Stack,
   Card,
@@ -17,14 +13,11 @@ import {
   Grid,
   Paper,
   Slider,
-  Avatar,
-  Badge,
   Tabs,
   Tab,
   Dialog,
   DialogTitle,
-  DialogContent,
-  DialogActions
+  DialogContent
 } from '@mui/material';
 import {
   School as SchoolIcon,
@@ -32,17 +25,11 @@ import {
   Upload as UploadIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Draw as DrawIcon,
-  Create as SignatureIcon,
-  Star as StarIcon,
-  CheckCircle as CheckCircleIcon,
-  Visibility as VisibilityIcon,
   Download as DownloadIcon,
   Settings as SettingsIcon,
   Percent as PercentIcon,
   Image as ImageIcon,
   Brush as BrushIcon,
-  Clear as ClearIcon,
   Undo as UndoIcon,
   Add as AddIcon
 } from '@mui/icons-material';
@@ -84,28 +71,43 @@ interface Signature {
 
 interface CertificateStepProps {
   certificateEnabled: boolean;
-  onCertificateEnabledChange: (enabled: boolean) => void;
+  onCertificateEnabledChange: (_enabled: boolean) => void;
   selectedTemplate: string;
-  onTemplateChange: (templateId: string) => void;
+  onTemplateChange: (_templateId: string) => void;
   certificateTitle: string;
-  onCertificateTitleChange: (title: string) => void;
+  onCertificateTitleChange: (_title: string) => void;
   certificateDescription: string;
-  onCertificateDescriptionChange: (description: string) => void;
+  onCertificateDescriptionChange: (_description: string) => void;
   completionPercentage: number;
-  onCompletionPercentageChange: (percentage: number) => void;
+  onCompletionPercentageChange: (_percentage: number) => void;
   logoFile: File | null;
-  onLogoChange: (file: File | null) => void;
+  /** Loaded/saved application logo URL (shown when no new file selected) */
+  applicationLogoUrl?: string | null;
+  onLogoChange: (_file: File | null) => void;
   applicationLogoEnabled: boolean;
-  onApplicationLogoEnabledChange: (enabled: boolean) => void;
+  onApplicationLogoEnabledChange: (_enabled: boolean) => void;
   signatures: Signature[];
-  onSignaturesChange: (signatures: Signature[]) => void;
+  onSignaturesChange: (_signatures: Signature[]) => void;
   // New props for creator logo
   creatorLogoFile: File | null;
-  onCreatorLogoChange: (file: File | null) => void;
+  /** Loaded/saved creator logo URL (shown when no new file selected) */
+  creatorLogoUrl?: string | null;
+  onCreatorLogoChange: (_file: File | null) => void;
+  /** Course ID (required to upload template; available after draft is saved) */
+  courseId?: string | null;
+  /** Selected certificate template PDF file (not yet uploaded) */
+  templatePdfFile?: File | null;
+  onTemplatePdfFileChange?: (_file: File | null) => void;
+  /** URL of certificate template PDF already saved for this course (S3 or local) */
+  certificateTemplatePdfUrl?: string | null;
+  /** Incremented when certificate is saved so preview iframe reloads (cache-busting) */
+  certificatePreviewKey?: number;
+  /** Called when Save Settings is clicked; parent uploads template if needed and saves draft */
+  onSaveSettings?: () => Promise<void>;
 }
 
 const SignatureCanvas: React.FC<{
-  onSave: (dataUrl: string) => void;
+  onSave: (_dataUrl: string) => void;
   onCancel: () => void;
 }> = ({ onSave, onCancel }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -257,8 +259,7 @@ const SignatureCanvas: React.FC<{
 const SafeMotionDiv: React.FC<{ children: React.ReactNode; [key: string]: any }> = ({ children, ...props }) => {
   try {
     return <motion.div {...props}>{children}</motion.div>;
-  } catch (error) {
-    console.warn('Framer-motion animation error:', error);
+  } catch {
     return <div style={{ opacity: 1 }}>{children}</div>;
   }
 };
@@ -275,6 +276,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
   completionPercentage,
   onCompletionPercentageChange,
   logoFile,
+  applicationLogoUrl,
   onLogoChange,
   applicationLogoEnabled,
   onApplicationLogoEnabledChange,
@@ -282,7 +284,14 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
   onSignaturesChange,
   // New props for creator logo
   creatorLogoFile,
-  onCreatorLogoChange
+  creatorLogoUrl,
+  onCreatorLogoChange,
+  courseId,
+  templatePdfFile,
+  onTemplatePdfFileChange,
+  certificateTemplatePdfUrl,
+  certificatePreviewKey = 0,
+  onSaveSettings
 }) => {
   const { user } = useAuth();
   const creatorName = user?.name || 'Course Instructor';
@@ -292,6 +301,8 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
   const [signBelowText, setSignBelowText] = useState('has successfully completed the course');
   const [studentName] = useState('John Doe'); // This will be dynamic from enrolled student data
   const [isPreviewLoaded, setIsPreviewLoaded] = useState(false);
+  const [savingCertificateSettings, setSavingCertificateSettings] = useState(false);
+  const templatePdfInputRef = React.useRef<HTMLInputElement>(null);
 
   // Memoize templates array to prevent recreation on every render
   const templates: CertificateTemplate[] = React.useMemo(() => [
@@ -345,7 +356,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
     }
   ], []);
 
-  // Initialize signatures immediately for better performance
+  // Initialize signatures - optimized to only run when needed
   useEffect(() => {
     if (signatures.length === 0) {
       const defaultInstructorSignature: Signature = {
@@ -370,7 +381,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
     }
   }, [signatures.length, creatorName, onSignaturesChange]);
 
-  // Load preview immediately for better performance
+  // Load preview - set immediately for better UX
   useEffect(() => {
     setIsPreviewLoaded(true);
   }, []);
@@ -381,7 +392,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
     displayTitle: string,
     displayDescription: string,
     scale: number = 1,
-    height: string = '600px'
+    _height: string = '600px'
   ) => {
     if (!isPreviewLoaded) {
       return (
@@ -451,10 +462,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
               </Box>
             )}
             {/* Course Logo - Top Right */}
-            {logoFile && (
+            {(logoFile || applicationLogoUrl) && (
               <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
                 <img
-                  src={URL.createObjectURL(logoFile)}
+                  src={logoFile ? URL.createObjectURL(logoFile) : applicationLogoUrl || undefined}
                   alt="Course Logo"
                   style={{
                     width: `${35 * scale}px`,
@@ -467,10 +478,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
             )}
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               {/* Creator Logo - Centered below header */}
-              {creatorLogoFile && (
+              {(creatorLogoFile || creatorLogoUrl) && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2, mt: 1 }}>
                   <img
-                    src={URL.createObjectURL(creatorLogoFile)}
+                    src={creatorLogoFile ? URL.createObjectURL(creatorLogoFile) : creatorLogoUrl || undefined}
                     alt="Creator Logo"
                     style={{
                       width: `${50 * scale}px`,
@@ -633,10 +644,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
               </Box>
             )}
             {/* Course Logo - Top Right */}
-            {logoFile && (
+            {(logoFile || applicationLogoUrl) && (
               <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
                 <img
-                  src={URL.createObjectURL(logoFile)}
+                  src={logoFile ? URL.createObjectURL(logoFile) : applicationLogoUrl || undefined}
                   alt="Course Logo"
                   style={{
                     width: `${30 * scale}px`,
@@ -655,10 +666,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                 mb: 2
               }} />
               {/* Creator Logo - Centered below header */}
-              {creatorLogoFile && (
+              {(creatorLogoFile || creatorLogoUrl) && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                   <img
-                    src={URL.createObjectURL(creatorLogoFile)}
+                    src={creatorLogoFile ? URL.createObjectURL(creatorLogoFile) : creatorLogoUrl || undefined}
                     alt="Creator Logo"
                     style={{
                       width: `${40 * scale}px`,
@@ -812,10 +823,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
               </Box>
             )}
             {/* Course Logo - Top Right */}
-            {logoFile && (
+            {(logoFile || applicationLogoUrl) && (
               <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
                 <img
-                  src={URL.createObjectURL(logoFile)}
+                  src={logoFile ? URL.createObjectURL(logoFile) : applicationLogoUrl || undefined}
                   alt="Course Logo"
                   style={{
                     width: `${30 * scale}px`,
@@ -828,10 +839,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
             )}
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               {/* Creator Logo - Centered below header */}
-              {creatorLogoFile && (
+              {(creatorLogoFile || creatorLogoUrl) && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                   <img
-                    src={URL.createObjectURL(creatorLogoFile)}
+                    src={creatorLogoFile ? URL.createObjectURL(creatorLogoFile) : creatorLogoUrl || undefined}
                     alt="Creator Logo"
                     style={{
                       width: `${40 * scale}px`,
@@ -985,10 +996,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
               </Box>
             )}
             {/* Course Logo - Top Right */}
-            {logoFile && (
+            {(logoFile || applicationLogoUrl) && (
               <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
                 <img
-                  src={URL.createObjectURL(logoFile)}
+                  src={logoFile ? URL.createObjectURL(logoFile) : applicationLogoUrl || undefined}
                   alt="Course Logo"
                   style={{
                     width: `${30 * scale}px`,
@@ -1001,10 +1012,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
             )}
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               {/* Creator Logo - Centered below header */}
-              {creatorLogoFile && (
+              {(creatorLogoFile || creatorLogoUrl) && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                   <img
-                    src={URL.createObjectURL(creatorLogoFile)}
+                    src={creatorLogoFile ? URL.createObjectURL(creatorLogoFile) : creatorLogoUrl || undefined}
                     alt="Creator Logo"
                     style={{
                       width: `${40 * scale}px`,
@@ -1129,7 +1140,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
       );
     }
     return null;
-  }, [isPreviewLoaded, studentName, creatorName, logoFile, creatorLogoFile, applicationLogoEnabled, signatures, signBelowText]);
+  }, [isPreviewLoaded, studentName, creatorName, logoFile, applicationLogoUrl, creatorLogoFile, creatorLogoUrl, applicationLogoEnabled, signatures, signBelowText]);
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1246,11 +1257,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
     // Convert all images and then download
     Promise.all([
       convertSealToDataURL(),
-      logoFile ? convertLogoToDataURL(logoFile) : Promise.resolve(''),
-      creatorLogoFile ? convertLogoToDataURL(creatorLogoFile) : Promise.resolve('')
-    ]).then(([sealDataURL, courseLogoDataURL, creatorLogoDataURL]) => {
+      logoFile ? convertLogoToDataURL(logoFile) : (applicationLogoUrl ? Promise.resolve(applicationLogoUrl) : Promise.resolve('')),
+      creatorLogoFile ? convertLogoToDataURL(creatorLogoFile) : (creatorLogoUrl ? Promise.resolve(creatorLogoUrl) : Promise.resolve(''))
+    ]).then(([_sealDataURL, _courseLogoDataURL, _creatorLogoDataURL]) => {
       // Temporarily disabled for performance optimization
-      console.log('Download certificate functionality temporarily disabled for performance');
       // const certificateData: CertificateData = {
       //   studentName: studentName,
       //   courseName: certificateTitle || 'Certificate of Achievement',
@@ -1708,10 +1718,10 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                                     cursor: 'pointer',
                                     '&:hover': { borderColor: '#6C63FF', backgroundColor: '#F8FAFF' }
                                   }} onClick={() => document.getElementById('logo-upload')?.click()}>
-                                    {logoFile ? (
+                                    {(logoFile || applicationLogoUrl) ? (
                                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
                                         <img
-                                          src={URL.createObjectURL(logoFile)}
+                                          src={logoFile ? URL.createObjectURL(logoFile) : applicationLogoUrl || undefined}
                                           alt="Course Logo"
                                           style={{
                                             width: '60px',
@@ -1721,7 +1731,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                                           }}
                                         />
                                         <Typography variant="body2" color="text.secondary">
-                                          Logo uploaded successfully
+                                          {logoFile ? 'Logo uploaded successfully' : 'Course logo'}
                                         </Typography>
                                       </Box>
                                     ) : (
@@ -1782,20 +1792,22 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                                 Upload your creator logo to display on the certificate
                               </Typography>
                               <Box sx={{ mt: 2 }}>
-                                {creatorLogoFile ? (
+                                {(creatorLogoFile || creatorLogoUrl) ? (
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, border: '1px solid #e5e7eb', borderRadius: 2 }}>
                                     <img
-                                      src={URL.createObjectURL(creatorLogoFile)}
+                                      src={creatorLogoFile ? URL.createObjectURL(creatorLogoFile) : creatorLogoUrl || undefined}
                                       alt="Creator Logo"
                                       style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: '4px' }}
                                     />
                                     <Box sx={{ flex: 1 }}>
                                       <Typography variant="body2" fontWeight={500}>
-                                        {creatorLogoFile.name}
+                                        {creatorLogoFile ? creatorLogoFile.name : 'Creator logo'}
                                       </Typography>
-                                      <Typography variant="caption" color="text.secondary">
-                                        {(creatorLogoFile.size / 1024 / 1024).toFixed(2)} MB
-                                      </Typography>
+                                      {creatorLogoFile && (
+                                        <Typography variant="caption" color="text.secondary">
+                                          {(creatorLogoFile.size / 1024 / 1024).toFixed(2)} MB
+                                        </Typography>
+                                      )}
                                     </Box>
                                     <Button
                                       size="small"
@@ -2298,15 +2310,141 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                               </Typography>
                             </Box>
                           </Paper>
+
+                          {/* Certificate is generated from Templates + Editor + Settings and saved when you click Save Settings */}
+                          <Paper sx={{ p: 3, borderRadius: 3 }}>
+                            <Typography variant="h6" fontWeight={600} gutterBottom>
+                              <ImageIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#6C63FF' }} />
+                              Save your certificate design
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                              Your certificate is built from your choices in <strong>Templates</strong>, <strong>Certificate Editor</strong>, and <strong>Settings</strong> above. Click <strong>Save Settings</strong> below to generate a PDF from this design and save it—no local file upload needed. When a learner completes the course, that saved design is used to issue their certificate.
+                            </Typography>
+                            {certificateTemplatePdfUrl && !templatePdfFile && (
+                              <>
+                                <Typography variant="body2" color="success.main" sx={{ mt: 2 }}>
+                                  Certificate design saved. Learners will receive a certificate based on this design when they qualify.
+                                </Typography>
+                                <Box sx={{ mt: 2 }}>
+                                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                    Saved design preview
+                                  </Typography>
+                                  <Box
+                                    sx={{
+                                      border: '1px solid',
+                                      borderColor: 'divider',
+                                      borderRadius: 2,
+                                      overflow: 'hidden',
+                                      bgcolor: 'grey.100',
+                                      minHeight: 320,
+                                      maxHeight: 420,
+                                      display: 'flex',
+                                      flexDirection: 'column'
+                                    }}
+                                  >
+                                    <iframe
+                                      key={certificatePreviewKey}
+                                      title="Saved certificate template preview"
+                                      src={`${certificateTemplatePdfUrl}?t=${certificatePreviewKey}#toolbar=0&navpanes=0&scrollbar=0`}
+                                      style={{
+                                        width: '100%',
+                                        height: 380,
+                                        border: 'none'
+                                      }}
+                                    />
+                                    <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+                                      <Button
+                                        size="small"
+                                        href={`${certificateTemplatePdfUrl}?t=${certificatePreviewKey}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        Open full preview in new tab
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<DownloadIcon />}
+                                        onClick={async () => {
+                                          try {
+                                            const url = `${certificateTemplatePdfUrl}?t=${certificatePreviewKey}`;
+                                            const res = await fetch(url);
+                                            const blob = await res.blob();
+                                            const a = document.createElement('a');
+                                            a.href = URL.createObjectURL(blob);
+                                            a.download = `certificate-template-${Date.now()}.pdf`;
+                                            a.click();
+                                            URL.revokeObjectURL(a.href);
+                                          } catch {
+                                            window.open(`${certificateTemplatePdfUrl}?t=${certificatePreviewKey}`, '_blank');
+                                          }
+                                        }}
+                                      >
+                                        Download
+                                      </Button>
+                                    </Box>
+                                  </Box>
+                                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                    This is what learners will receive. To change it, edit Templates / Certificate Editor / Settings above and click Save Settings again.
+                                  </Typography>
+                                </Box>
+                              </>
+                            )}
+                            {courseId && (
+                              <Stack spacing={2} sx={{ mt: 2 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Alternatively, use a custom PDF template:
+                                </Typography>
+                                <input
+                                  ref={templatePdfInputRef}
+                                  type="file"
+                                  accept="application/pdf"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) onTemplatePdfFileChange?.(file);
+                                    e.target.value = '';
+                                  }}
+                                />
+                                {templatePdfFile && (
+                                  <Typography variant="body2" color="primary.main">
+                                    Selected: {templatePdfFile.name} — click Save Settings to use this file instead.
+                                  </Typography>
+                                )}
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<UploadIcon />}
+                                  onClick={() => templatePdfInputRef.current?.click()}
+                                  disabled={!courseId}
+                                  sx={{ alignSelf: 'flex-start' }}
+                                >
+                                  {certificateTemplatePdfUrl && !templatePdfFile ? 'Replace with custom PDF' : 'Use custom PDF instead'}
+                                </Button>
+                              </Stack>
+                            )}
+                            {!courseId && (
+                              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                Save your draft first to get a course ID, then you can save certificate settings.
+                              </Typography>
+                            )}
+                          </Paper>
                           
                           {/* Save Settings Button */}
                           <Stack direction="row" spacing={2} justifyContent="flex-end" mt={4}>
                             <Button
                               variant="outlined"
                               color="secondary"
-                              onClick={() => {
-                                // Save certificate settings
-                                // This will automatically save since we're using controlled components
+                              disabled={savingCertificateSettings || !courseId}
+                              onClick={async () => {
+                                if (onSaveSettings) {
+                                  setSavingCertificateSettings(true);
+                                  try {
+                                    await onSaveSettings();
+                                  } finally {
+                                    setSavingCertificateSettings(false);
+                                  }
+                                }
                               }}
                               sx={{
                                 borderColor: '#6C63FF',
@@ -2317,7 +2455,7 @@ const CertificateStep: React.FC<CertificateStepProps> = React.memo(({
                                 }
                               }}
                             >
-                              Save Settings
+                              {savingCertificateSettings ? 'Saving...' : 'Save Settings'}
                             </Button>
                           </Stack>
                         </Stack>

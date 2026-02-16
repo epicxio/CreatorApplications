@@ -18,6 +18,7 @@ interface ToastNotificationProps {
   onClose: () => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by styled API
 const ToastContainer = styled(motion.div)<{ type: ToastType }>(({ type, theme }) => {
   const colors = {
     success: {

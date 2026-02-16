@@ -6,7 +6,6 @@ import {
   Typography,
   Button,
   TextField,
-  Alert,
   Paper,
   List,
   ListItem,
@@ -25,11 +24,8 @@ import {
   Upload as UploadIcon,
   Delete as DeleteIcon,
   CheckCircle as CheckIcon,
-  Description as DescriptionIcon,
   AttachFile as AttachFileIcon,
-  Close as CloseIcon
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
 import { AssignmentSubmission, FileSubmission } from '../../types/course';
 
 interface AssignmentComponentProps {
@@ -37,7 +33,7 @@ interface AssignmentComponentProps {
   submissionType: 'text' | 'file' | 'both';
   maxFileSize?: number; // in MB
   allowedFileTypes?: string[];
-  onSubmit: (submission: Omit<AssignmentSubmission, 'id' | 'submittedAt' | 'status'>) => void;
+  onSubmit: (_submission: Omit<AssignmentSubmission, 'id' | 'submittedAt' | 'status'>) => void;
   onExit?: () => void;
 }
 
@@ -118,8 +114,7 @@ const AssignmentComponent: React.FC<AssignmentComponentProps> = ({
 
       onSubmit(submission);
       setShowPreview(true);
-    } catch (error) {
-      console.error('Error submitting assignment:', error);
+    } catch {
       alert('Failed to submit assignment. Please try again.');
     } finally {
       setIsSubmitting(false);

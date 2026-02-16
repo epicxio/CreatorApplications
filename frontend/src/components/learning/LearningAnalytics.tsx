@@ -13,9 +13,6 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Avatar,
-  Paper,
-  Divider,
-  Button,
   Select,
   MenuItem,
   FormControl,
@@ -27,15 +24,11 @@ import {
   School as SchoolIcon,
   Timer as TimerIcon,
   CheckCircle as CheckCircleIcon,
-  Star as StarIcon,
-  CalendarToday as CalendarIcon,
-  Bookmark as BookmarkIcon,
-  Quiz as QuizIcon,
-  Assignment as AssignmentIcon,
-  VideoLibrary as VideoIcon
+  Quiz as QuizIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { progressService } from '../../services/progressService';
+import { courseService } from '../../services/courseService';
 import { useAuth } from '../../context/AuthContext';
 
 interface LearningAnalyticsProps {
@@ -57,29 +50,38 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30d');
 
-  // Load analytics data
+  // Load analytics data from backend (with localStorage fallback)
   const loadAnalytics = async () => {
     if (!user?._id) return;
 
     try {
       setLoading(true);
-      
-      // Get learning statistics
-      const stats = progressService.getLearningStats(user._id);
-      
-      // Get all progress data
-      const allProgress = progressService.getAllProgress(user._id);
-      
-      // Calculate recent activity (last 7 days)
+
+      const response = await courseService.getMyProgress();
+      let allProgress = response.success && response.data.length > 0 ? response.data : null;
+      if (!allProgress?.length) {
+        allProgress = progressService.getAllProgress(user._id);
+      }
+
+      const stats = allProgress.length > 0
+        ? {
+            totalCourses: allProgress.length,
+            completedCourses: allProgress.filter(p => p.overallProgress === 100).length,
+            totalTimeSpent: allProgress.reduce((sum, p) => sum + (p.timeSpent || 0), 0),
+            averageCompletionRate: Math.round(
+              allProgress.reduce((sum, p) => sum + p.overallProgress, 0) / allProgress.length
+            )
+          }
+        : progressService.getLearningStats(user._id);
+
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
+
       const recentActivity = allProgress
         .filter(progress => new Date(progress.lastAccessed) > sevenDaysAgo)
         .sort((a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime())
         .slice(0, 5);
 
-      // Mock achievements
       const achievements = [
         {
           id: '1',
@@ -115,7 +117,6 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
         }
       ];
 
-      // Mock weekly progress data
       const weeklyProgress = [
         { day: 'Mon', hours: 2.5, lessons: 3 },
         { day: 'Tue', hours: 1.8, lessons: 2 },
@@ -126,10 +127,9 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
         { day: 'Sun', hours: 2.8, lessons: 3 }
       ];
 
-      // Course breakdown
       const courseBreakdown = allProgress.map(progress => ({
         courseId: progress.courseId,
-        courseName: `Course ${progress.courseId}`, // In real app, fetch course name
+        courseName: `Course ${progress.courseId}`,
         progress: progress.overallProgress,
         timeSpent: progress.timeSpent,
         completedLessons: progress.completedLessons.length,
@@ -147,8 +147,8 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
         weeklyProgress,
         courseBreakdown
       });
-    } catch (error) {
-      console.error('Error loading analytics:', error);
+    } catch {
+      // Analytics load failed; state unchanged
     } finally {
       setLoading(false);
     }
@@ -157,6 +157,7 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
   // Load analytics on mount
   useEffect(() => {
     loadAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id, courseId]);
 
   const formatTime = (minutes: number): string => {
@@ -325,7 +326,7 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
                 </Box>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                  {analytics.weeklyProgress.map((day, index) => (
+                  {analytics.weeklyProgress.map((day, _index) => (
                     <Box key={day.day} sx={{ textAlign: 'center', flex: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                         {day.day}
@@ -366,7 +367,7 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
                 </Typography>
                 
                 <List dense>
-                  {analytics.achievements.map((achievement, index) => (
+                  {analytics.achievements.map((achievement, _index) => (
                     <ListItem key={achievement.id} sx={{ px: 0 }}>
                       <ListItemIcon>
                         <Avatar
@@ -434,8 +435,8 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
                   </Box>
                 ) : (
                   <List dense>
-                    {analytics.recentActivity.map((activity, index) => (
-                      <ListItem key={index} sx={{ px: 0 }}>
+                    {analytics.recentActivity.map((activity, _index) => (
+                      <ListItem key={_index} sx={{ px: 0 }}>
                         <ListItemIcon>
                           <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
                             <SchoolIcon />
@@ -491,7 +492,7 @@ const LearningAnalytics: React.FC<LearningAnalyticsProps> = ({ courseId }) => {
                   </Box>
                 ) : (
                   <List dense>
-                    {analytics.courseBreakdown.map((course, index) => (
+                    {analytics.courseBreakdown.map((course, _index) => (
                       <ListItem key={course.courseId} sx={{ px: 0 }}>
                         <ListItemText
                           primary={

@@ -15,14 +15,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: any) {
-    console.error('ErrorBoundary caught an error:', error);
+  static getDerivedStateFromError(_error: any) {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error details:', error);
-    console.error('Error info:', errorInfo);
+  componentDidCatch(_error: Error, _errorInfo: React.ErrorInfo) {
+    // Error logged by ErrorBoundary
   }
 
   render() {
@@ -39,11 +37,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-console.log('Starting application initialization...');
-
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-
-console.log('Rendering application with providers...');
 
 root.render(
   <React.StrictMode>

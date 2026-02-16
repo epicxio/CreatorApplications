@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Email, Lock, Visibility, VisibilityOff, Instagram, Facebook, YouTube, CheckCircle } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog as MUIDialog, DialogContent as MUIDialogContent } from '@mui/material';
 import authService from '../../services/authService';
 
@@ -79,11 +79,29 @@ const StyledTextField = styled(TextField)`
   & .MuiOutlinedInput-root {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
+    
+    /* Fix autofill white patch */
+    &:-webkit-autofill,
+    &:-webkit-autofill:hover,
+    &:-webkit-autofill:focus,
+    &:-webkit-autofill:active {
+      -webkit-box-shadow: 0 0 0 100px rgba(255, 255, 255, 0.05) inset !important;
+      -webkit-text-fill-color: inherit !important;
+      background-color: rgba(255, 255, 255, 0.05) !important;
+      transition: background-color 5000s ease-in-out 0s;
+    }
   }
 
-  & .MuiInputBase-input:-webkit-autofill {
-    -webkit-box-shadow: 0 0 0 100px transparent inset;
-    -webkit-text-fill-color: inherit;
+  & .MuiInputBase-input {
+    &:-webkit-autofill,
+    &:-webkit-autofill:hover,
+    &:-webkit-autofill:focus,
+    &:-webkit-autofill:active {
+      -webkit-box-shadow: 0 0 0 100px rgba(255, 255, 255, 0.05) inset !important;
+      -webkit-text-fill-color: inherit !important;
+      background-color: rgba(255, 255, 255, 0.05) !important;
+      transition: background-color 5000s ease-in-out 0s;
+    }
   }
 `;
 
@@ -205,8 +223,7 @@ interface LoginFormData {
 }
 
 export const Login = () => {
-  console.log('Login component (Login/Signup Page) is rendering');
-  const { login } = useAuth();
+  const { setUser } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState<SignUpFormData>({
     name: '',
@@ -228,15 +245,20 @@ export const Login = () => {
   const [logoError, setLogoError] = useState(false);
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [usernameError, setUsernameError] = useState('');
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || '').trim());
 
   useEffect(() => {
-    console.log('Login component mounted');
     // Preload the logo
     const img = new Image();
     img.src = creatorLogo;
     img.onerror = () => {
-      console.error('Failed to load logo');
       setLogoError(true);
     };
   }, []);
@@ -244,7 +266,17 @@ export const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (usernameError || phoneError) {
+    if (formData.email && !isValidEmail(formData.email)) {
+      setEmailError('Not a valid email address.');
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (formData.phoneNumber && !isValidPhone(formData.phoneNumber)) {
+      setPhoneError('Please enter a valid 10-digit phone number.');
+      setError('Please enter a valid 10-digit phone number.');
+      return;
+    }
+    if (emailError || usernameError || phoneError) {
       setError('Please fix the errors before submitting.');
       return;
     }
@@ -263,41 +295,74 @@ export const Login = () => {
           youtube: formData.youtube,
         })
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'Sign up failed');
+        const msg = data.message || (Array.isArray(data.errors) && data.errors[0]?.msg) || 'Sign up failed';
+        throw new Error(msg);
       }
       setSuccessDialogOpen(true);
       setFormData({ name: '', email: '', username: '', phoneNumber: '', password: '', instagram: '', facebook: '', youtube: '' });
+      setEmailError('');
+      setUsernameError('');
+      setPhoneError('');
+      setShowSignupPassword(false);
     } catch (err: any) {
       setError(err.message || 'Failed to sign up. Please try again.');
-      console.error('Signup error:', err);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    if (name === 'phoneNumber') {
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+      setFormData({ ...formData, [name]: digitsOnly });
+      setPhoneError('');
+      return;
+    }
+    if (name === 'email') setEmailError('');
+    if (name === 'username') setUsernameError('');
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Show login animation
+    setIsLoggingIn(true);
+    setLoginSuccess(false);
+    
+    // Optimize: Close dialog immediately for better UX
+    setLoginDialogOpen(false);
+    
     try {
-      const token = await authService.login(loginFormData.email, loginFormData.password);
-      await login(token);
-      setLoginDialogOpen(false);
-      // Fetch user profile to determine role
-      const userProfile = await authService.getProfile();
-      if (userProfile?.role?.name === 'Creator' || userProfile?.role?.name === 'Learner') {
-        navigate('/get-to-know');
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (err) {
-      setError('Invalid email or password');
+      // Get token and complete user data in a single call (optimized backend)
+      const { token, user: userProfile } = await authService.login(loginFormData.email, loginFormData.password);
+      localStorage.setItem('token', token);
+      
+      // Update user context immediately with profile data
+      setUser(userProfile);
+      
+      // Show success animation
+      setLoginSuccess(true);
+      setIsLoggingIn(false);
+      
+      // Wait a bit for success animation, then navigate
+      setTimeout(() => {
+        // Navigate based on role - do this immediately for seamless experience
+        if (userProfile?.role?.name === 'Creator' || userProfile?.role?.name === 'Learner') {
+          navigate('/get-to-know', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      }, 800);
+    } catch (err: any) {
+      // Hide animation on error
+      setIsLoggingIn(false);
+      setLoginSuccess(false);
+      // Re-open dialog on error
+      setLoginDialogOpen(true);
+      setError(err.response?.data?.message || 'Invalid email or password');
     }
   };
 
@@ -308,17 +373,33 @@ export const Login = () => {
     });
   };
 
+  const handleEmailBlur = () => {
+    if (!formData.email) {
+      setEmailError('');
+      return;
+    }
+    if (!isValidEmail(formData.email)) {
+      setEmailError('Not a valid email address.');
+    } else {
+      setEmailError('');
+    }
+  };
+
   const handleUsernameBlur = async () => {
-    if (!formData.username) return;
+    if (!formData.username || !formData.username.trim()) {
+      setUsernameError('');
+      return;
+    }
+    setUsernameChecking(true);
+    setUsernameError('');
     try {
-      const res = await fetch(`/api/users/check-username?username=${encodeURIComponent(formData.username)}`);
+      const res = await fetch(`/api/users/check-username?username=${encodeURIComponent(formData.username.trim())}`);
       if (res.status === 304) {
         setUsernameError('');
         return;
       }
       if (!res.ok) {
-        setUsernameError('Could not validate username (server error)');
-        console.error('Username check failed: HTTP', res.status);
+        setUsernameError('Could not check username (server error)');
         return;
       }
       const text = await res.text();
@@ -328,27 +409,37 @@ export const Login = () => {
       }
       const data = JSON.parse(text);
       if (data.taken) {
-        setUsernameError('Username is already taken');
+        setUsernameError('This username already exists.');
       } else {
         setUsernameError('');
       }
     } catch (err) {
-      setUsernameError('Could not validate username (network error)');
-      console.error('Username check error:', err);
+      setUsernameError('Could not check username (network error)');
+    } finally {
+      setUsernameChecking(false);
     }
   };
 
+  const isValidPhone = (value: string) => /^\d{10}$/.test((value || '').trim());
+
   const handlePhoneBlur = async () => {
-    if (!formData.phoneNumber) return;
+    const value = (formData.phoneNumber || '').trim();
+    if (!value) {
+      setPhoneError('');
+      return;
+    }
+    if (value.length !== 10 || !/^\d+$/.test(value)) {
+      setPhoneError('Please enter a valid 10-digit phone number.');
+      return;
+    }
     try {
-      const res = await fetch(`/api/users/check-phone?phoneNumber=${encodeURIComponent(formData.phoneNumber)}`);
+      const res = await fetch(`/api/users/check-phone?phoneNumber=${encodeURIComponent(value)}`);
       if (res.status === 304) {
         setPhoneError('');
         return;
       }
       if (!res.ok) {
         setPhoneError('Could not validate phone number (server error)');
-        console.error('Phone check failed: HTTP', res.status);
         return;
       }
       const text = await res.text();
@@ -358,13 +449,12 @@ export const Login = () => {
       }
       const data = JSON.parse(text);
       if (data.taken) {
-        setPhoneError('Phone number is already registered');
+        setPhoneError('Phone number is already registered.');
       } else {
         setPhoneError('');
       }
     } catch (err) {
       setPhoneError('Could not validate phone number (network error)');
-      console.error('Phone check error:', err);
     }
   };
 
@@ -449,7 +539,10 @@ export const Login = () => {
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
+                      onBlur={handleEmailBlur}
                       required
+                      error={!!emailError}
+                      helperText={emailError}
                     />
                     <StyledTextField
                       fullWidth
@@ -460,7 +553,7 @@ export const Login = () => {
                       onBlur={handleUsernameBlur}
                       required
                       error={!!usernameError}
-                      helperText={usernameError}
+                      helperText={usernameChecking ? 'Checking...' : usernameError}
                     />
                     <StyledTextField
                       fullWidth
@@ -472,15 +565,37 @@ export const Login = () => {
                       required
                       error={!!phoneError}
                       helperText={phoneError}
+                      inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+                      placeholder="10 digits"
                     />
                     <StyledTextField
                       fullWidth
                       label="Password"
-                      type="password"
+                      type={showSignupPassword ? 'text' : 'password'}
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
                       required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock sx={{ color: '#6C63FF' }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowSignupPassword(!showSignupPassword)}
+                              onMouseDown={(e) => e.preventDefault()}
+                              edge="end"
+                              size="small"
+                              aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showSignupPassword ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                     <Grid container spacing={2} sx={{ width: '100%', mt: 1 }}>
                       <Grid item xs={12} sm={4}>
@@ -563,6 +678,18 @@ export const Login = () => {
                 type="email"
                 value={loginFormData.email}
                 onChange={(e) => setLoginFormData({ ...loginFormData, email: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    // Focus password field if empty, otherwise submit
+                    if (!loginFormData.password) {
+                      const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
+                      passwordInput?.focus();
+                    } else {
+                      handleLogin(e as any);
+                    }
+                  }
+                }}
                 required
                 error={!!error}
                 InputProps={{
@@ -579,6 +706,12 @@ export const Login = () => {
                 type={loginFormData.showPassword ? 'text' : 'password'}
                 value={loginFormData.password}
                 onChange={(e) => setLoginFormData({ ...loginFormData, password: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleLogin(e as any);
+                  }
+                }}
                 required
                 error={!!error}
                 helperText={error}
@@ -593,6 +726,7 @@ export const Login = () => {
                       <IconButton
                         onClick={handleClickShowPassword}
                         edge="end"
+                        type="button"
                       >
                         {loginFormData.showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -635,19 +769,351 @@ export const Login = () => {
             <Typography variant="h5" align="center" sx={{ color: '#6C63FF', fontWeight: 'bold', mb: 1 }}>
               Your Request is Sent to Creator Admin
             </Typography>
-            <Typography variant="body1" align="center" sx={{ opacity: 0.8 }}>
-              You will be notified once your request is reviewed.
+            <Typography variant="body1" align="center" sx={{ opacity: 0.8, mb: 1 }}>
+              Now login to the portal and upload the KYC - to proceed further.
             </Typography>
-            <Button
-              variant="contained"
-              sx={{ mt: 3, background: '#6C63FF', color: 'white', borderRadius: '12px', px: 4 }}
-              onClick={() => setSuccessDialogOpen(false)}
-            >
-              Close
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, mt: 3, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                sx={{ background: '#6C63FF', color: 'white', borderRadius: '12px', px: 3 }}
+                onClick={() => {
+                  setSuccessDialogOpen(false);
+                  setLoginDialogOpen(true);
+                }}
+              >
+                Login
+              </Button>
+              <Button
+                variant="outlined"
+                sx={{ borderColor: '#6C63FF', color: '#6C63FF', borderRadius: '12px', px: 3 }}
+                onClick={() => setSuccessDialogOpen(false)}
+              >
+                Close
+              </Button>
+            </Box>
           </motion.div>
         </MUIDialogContent>
       </MUIDialog>
+
+      {/* Sign In Animation Overlay */}
+      <AnimatePresence>
+        {(isLoggingIn || loginSuccess) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.95), rgba(108, 99, 255, 0.85))',
+              backdropFilter: 'blur(20px)',
+            }}
+          >
+            {isLoggingIn && (
+              <motion.div
+                key="loading"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                }}
+              >
+                {/* Container for spinner and rings */}
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: 200,
+                    height: 200,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {/* Pulsing Rings */}
+                  {[0, 1, 2].map((i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ scale: 0.8, opacity: 0.8 }}
+                      animate={{
+                        scale: [1, 1.5, 1],
+                        opacity: [0.8, 0, 0.8],
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: 'easeOut',
+                        delay: i * 0.3,
+                      }}
+                      style={{
+                        position: 'absolute',
+                        width: 120,
+                        height: 120,
+                        borderRadius: '50%',
+                        border: '3px solid rgba(108, 99, 255, 0.5)',
+                        pointerEvents: 'none',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                    />
+                  ))}
+
+                  {/* Animated Spinner */}
+                  <motion.div
+                    animate={{
+                      rotate: 360,
+                      scale: [1, 1.1, 1],
+                    }}
+                    transition={{
+                      rotate: {
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: 'linear',
+                      },
+                      scale: {
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                      },
+                    }}
+                    style={{
+                      width: 120,
+                      height: 120,
+                      borderRadius: '50%',
+                      background: 'conic-gradient(from 0deg, #6C63FF, #00FFC6, #00F5FF, #6C63FF)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      boxShadow: '0 0 40px rgba(108, 99, 255, 0.5)',
+                      zIndex: 1,
+                    }}
+                  >
+                    <motion.div
+                      animate={{
+                        rotate: -360,
+                        scale: [1, 0.9, 1],
+                      }}
+                      transition={{
+                        rotate: {
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        },
+                        scale: {
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        },
+                      }}
+                      style={{
+                        width: 90,
+                        height: 90,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+                        backdropFilter: 'blur(10px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.7, 1, 0.7],
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        }}
+                        style={{
+                          width: 50,
+                          height: 50,
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #6C63FF, #00FFC6)',
+                          boxShadow: '0 0 20px rgba(108, 99, 255, 0.8)',
+                        }}
+                      />
+                    </motion.div>
+                  </motion.div>
+                </Box>
+
+                {/* Loading Text */}
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  style={{ marginTop: 40, textAlign: 'center' }}
+                >
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      color: 'white',
+                      fontWeight: 'bold',
+                      mb: 1,
+                      textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                    }}
+                  >
+                    Signing you in...
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      textShadow: '0 1px 5px rgba(0, 0, 0, 0.2)',
+                    }}
+                  >
+                    Creating your seamless experience
+                  </Typography>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {loginSuccess && (
+              <motion.div
+                key="success"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 200,
+                  damping: 15,
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {/* Success Circle */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 200,
+                    damping: 15,
+                    delay: 0.1,
+                  }}
+                  style={{
+                    width: 120,
+                    height: 120,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #00FFC6, #00F5FF)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 40px rgba(0, 255, 198, 0.6)',
+                    position: 'relative',
+                  }}
+                >
+                  {/* Checkmark */}
+                  <motion.svg
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: 1 }}
+                    transition={{
+                      duration: 0.5,
+                      delay: 0.3,
+                      ease: 'easeOut',
+                    }}
+                    width="60"
+                    height="60"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <motion.path
+                      d="M5 13l4 4L19 7"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{
+                        duration: 0.5,
+                        delay: 0.3,
+                        ease: 'easeOut',
+                      }}
+                    />
+                  </motion.svg>
+
+                  {/* Success Rings */}
+                  {[0, 1].map((i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ scale: 1, opacity: 0.6 }}
+                      animate={{
+                        scale: [1, 1.8, 1.8],
+                        opacity: [0.6, 0, 0],
+                      }}
+                      transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        ease: 'easeOut',
+                        delay: i * 0.5,
+                      }}
+                      style={{
+                        position: 'absolute',
+                        width: 120,
+                        height: 120,
+                        borderRadius: '50%',
+                        border: '3px solid rgba(0, 255, 198, 0.5)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  ))}
+                </motion.div>
+
+                {/* Success Text */}
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  style={{ marginTop: 40, textAlign: 'center' }}
+                >
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      color: 'white',
+                      fontWeight: 'bold',
+                      mb: 1,
+                      textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                    }}
+                  >
+                    Welcome back, Creator!
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      textShadow: '0 1px 5px rgba(0, 0, 0, 0.2)',
+                    }}
+                  >
+                    Redirecting you now...
+                  </Typography>
+                </motion.div>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </RootContainer>
   );
 };

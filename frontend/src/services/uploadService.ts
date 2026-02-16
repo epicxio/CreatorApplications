@@ -3,8 +3,10 @@ import api from './api';
 export interface UploadedFile {
   filename: string;
   originalName: string;
-  path: string;
+  path?: string;
+  s3Key?: string;
   url: string;
+  presignedUrl?: string;
   size: number;
   mimetype: string;
 }
@@ -47,9 +49,12 @@ class UploadService {
   /**
    * Upload a PDF file
    */
-  async uploadPDF(file: File): Promise<UploadResponse> {
+  async uploadPDF(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/pdf`, formData, {
       headers: {
@@ -63,9 +68,12 @@ class UploadService {
   /**
    * Upload an image file
    */
-  async uploadImage(file: File): Promise<UploadResponse> {
+  async uploadImage(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/image`, formData, {
       headers: {
@@ -79,9 +87,12 @@ class UploadService {
   /**
    * Upload a document file (DOC, DOCX, PPT, PPTX, etc.)
    */
-  async uploadDocument(file: File): Promise<UploadResponse> {
+  async uploadDocument(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/document`, formData, {
       headers: {
@@ -95,21 +106,24 @@ class UploadService {
   /**
    * Upload a single resource file (automatically routes to correct endpoint based on file type)
    */
-  async uploadResource(file: File): Promise<UploadResponse> {
+  async uploadResource(file: File, courseId?: string | null): Promise<UploadResponse> {
     const fileType = this.getFileType(file);
 
     switch (fileType) {
       case 'pdf':
-        return this.uploadPDF(file);
+        return this.uploadPDF(file, courseId);
       case 'image':
-        return this.uploadImage(file);
+        return this.uploadImage(file, courseId);
       case 'document':
-        return this.uploadDocument(file);
+        return this.uploadDocument(file, courseId);
       default:
         // Legacy resource endpoint for unknown types
         const formData = new FormData();
         formData.append('file', file);
         formData.append('type', 'resources');
+        if (courseId) {
+          formData.append('courseId', courseId);
+        }
 
         const response = await api.post<UploadResponse>(`${this.baseUrl}/resource`, formData, {
           headers: {
@@ -124,12 +138,15 @@ class UploadService {
   /**
    * Upload multiple resource files
    */
-  async uploadMultipleResources(files: File[]): Promise<UploadResponse> {
+  async uploadMultipleResources(files: File[], courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('files', file);
     });
     formData.append('type', 'resources');
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/resources`, formData, {
       headers: {
@@ -143,9 +160,12 @@ class UploadService {
   /**
    * Upload a video file
    */
-  async uploadVideo(file: File): Promise<UploadResponse> {
+  async uploadVideo(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/video`, formData, {
       headers: {
@@ -159,9 +179,12 @@ class UploadService {
   /**
    * Upload a thumbnail image for a video
    */
-  async uploadThumbnail(file: File): Promise<UploadResponse> {
+  async uploadThumbnail(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/thumbnail`, formData, {
       headers: {
@@ -175,9 +198,12 @@ class UploadService {
   /**
    * Upload an audio file
    */
-  async uploadAudio(file: File): Promise<UploadResponse> {
+  async uploadAudio(file: File, courseId?: string | null): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (courseId) {
+      formData.append('courseId', courseId);
+    }
 
     const response = await api.post<UploadResponse>(`${this.baseUrl}/audio`, formData, {
       headers: {
@@ -190,20 +216,25 @@ class UploadService {
 
   /**
    * Get full URL for an uploaded file
+   * Handles both S3 URLs (http/https) and local paths
    */
-  getFileUrl(url: string | undefined | null): string {
+  getFileUrl(url: string | undefined | null, presignedUrl?: string | null): string {
     // Handle null/undefined/empty URLs
     if (!url) {
-      console.warn('getFileUrl called with empty URL');
       return '';
     }
     
-    // If URL already includes http, return as is
-    if (url.startsWith('http')) {
+    // Prefer presigned URL if available (for S3 private files)
+    if (presignedUrl && presignedUrl.startsWith('http')) {
+      return presignedUrl;
+    }
+    
+    // If URL already includes http/https, return as is (S3 URLs)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
     
-    // Otherwise, prepend API base URL (without /api suffix)
+    // Otherwise, prepend API base URL (for local files - legacy support)
     const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
     // Remove /api if present since uploads are served directly
     const baseUrl = apiBaseUrl.replace('/api', '');
@@ -215,5 +246,6 @@ class UploadService {
   }
 }
 
-export default new UploadService();
+const uploadService = new UploadService();
+export default uploadService;
 

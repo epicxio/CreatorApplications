@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, Chip, Button, IconButton, Menu, MenuItem, Tooltip, TextField, Select, FormControl, InputLabel, Grid, Stack, TableSortLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress
+  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, Chip, Button, IconButton, Menu, MenuItem, Tooltip, TextField, Select, FormControl, InputLabel, Grid, TableSortLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress
 } from '@mui/material';
-import { MoreVert, Edit, Delete, Visibility, Pause, PlayArrow, FileCopy, BarChart, CheckCircle, Drafts, Public, Lock, Link as LinkIcon, Group, Star, MonetizationOn, CalendarToday, Done, Close } from '@mui/icons-material';
+import { MoreVert, Edit, Delete, Visibility, Pause, PlayArrow, FileCopy, BarChart, CheckCircle, Drafts, Public, Lock, Link as LinkIcon, People as AffiliatesIcon, ContentCopy } from '@mui/icons-material';
 import { courseService } from '../../services/courseService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
 import ToastNotification from '../common/ToastNotification';
+import { useAuth } from '../../context/AuthContext';
+import type { AffiliateCodeItem } from '../../types/course';
 
 // Define the Course type for this table
 interface Course {
   id: string;
   courseId?: string; // Course ID in format C-{creator initials}-{number}
   name: string;
+  creatorId?: string | null;
+  creatorName?: string | null;
+  instructorUserId?: string | null;
   createdAt: string;
   type: 'Free' | 'Paid' | 'Invite Only';
   access: { mode: 'Lifetime' | 'Date-Range'; startDate?: string; endDate?: string };
@@ -58,12 +63,14 @@ const accessLabel = (access: Course['access']) => {
 };
 
 const sortableColumns = [
-  'courseId', 'name', 'createdAt', 'type', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'listedPrice', 'sellingPrice'
+  'courseId', 'name', 'creatorIdName', 'userId', 'createdAt', 'type', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'listedPrice', 'sellingPrice'
 ];
 
 const columnLabels: Record<string, string> = {
   courseId: 'Course ID',
   name: 'Course Name',
+  creatorIdName: 'Creator ID + Name',
+  userId: 'User ID',
   createdAt: 'Created Date',
   type: 'Course Type',
   access: 'Course Access',
@@ -102,39 +109,60 @@ const LearnLoopCourseManager: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [affiliatesDialogOpen, setAffiliatesDialogOpen] = useState(false);
+  const [affiliatesCourseId, setAffiliatesCourseId] = useState<string | null>(null);
+  const [affiliatesCourseName, setAffiliatesCourseName] = useState<string>('');
+  const [affiliatesList, setAffiliatesList] = useState<AffiliateCodeItem[]>([]);
+  const [affiliatesLoading, setAffiliatesLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast, success, error, hideToast } = useToast();
+  const { user } = useAuth();
+  const isSuperAdmin = Boolean(user?.role && (typeof user.role === 'object' ? user.role?.name : user.role) === 'Super Admin');
+  const tableColumns = isSuperAdmin
+    ? ['courseId', 'name', 'creatorIdName', 'userId', 'createdAt', 'type', 'access', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'actions']
+    : ['courseId', 'name', 'createdAt', 'type', 'access', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'actions'];
 
-  useEffect(() => {
+  const loadCourses = React.useCallback(() => {
     setLoading(true);
     courseService.getCourses().then((response) => {
       if (response.success && response.data) {
         // Map backend data to Course[] format expected by the table
-        const formattedCourses: Course[] = response.data.courses.map((course: any) => ({
-          id: course.id,
-          courseId: course.courseId || course.id, // Use courseId if available, fallback to id
-          name: course.name,
-          createdAt: course.createdAt,
-          type: course.sellingPrice?.INR > 0 || course.sellingPrice?.USD > 0 ? 'Paid' : 'Free' as 'Free' | 'Paid' | 'Invite Only',
-          access: { mode: 'Lifetime' as const },
-          enrollments: course.enrollments || 0,
-          completionRate: course.completionRate || 0,
-          status: course.status as 'Draft' | 'Published' | 'Live & Selling' | 'Paused' | 'Archived',
-          lastUpdated: course.lastUpdated,
-          visibility: course.visibility as 'Public' | 'Unlisted' | 'Private',
-          certificateEnabled: course.certificateEnabled || false,
-          dripEnabled: course.dripEnabled || false,
-          installmentsOn: false,
-          affiliateActive: course.affiliateActive || false,
-          listedPrice: course.listedPrice || { INR: 0, USD: 0, EUR: 0 },
-          sellingPrice: course.sellingPrice || { INR: 0, USD: 0, EUR: 0 }
-        }));
+        const formattedCourses: Course[] = response.data.courses.map((course: any) => {
+          return {
+            id: course.id,
+            courseId: course.courseId || course.id, // Use courseId if available, fallback to id
+            name: course.name,
+            creatorId: course.creatorId ?? null,
+            creatorName: course.creatorName ?? null,
+            instructorUserId: course.instructorUserId ?? null,
+            createdAt: course.createdAt,
+            type: course.sellingPrice?.INR > 0 || course.sellingPrice?.USD > 0 ? 'Paid' : 'Free' as 'Free' | 'Paid' | 'Invite Only',
+            access: { mode: 'Lifetime' as const },
+            enrollments: course.enrollments || 0,
+            completionRate: course.completionRate || 0,
+            status: course.status as 'Draft' | 'Published' | 'Live & Selling' | 'Paused' | 'Archived',
+            lastUpdated: course.lastUpdated,
+            visibility: course.visibility as 'Public' | 'Unlisted' | 'Private',
+            certificateEnabled: course.certificateEnabled || false,
+            dripEnabled: course.dripEnabled || false,
+            installmentsOn: course.installmentsOn ?? false,
+            affiliateActive: course.affiliateActive ?? false,
+            listedPrice: course.listedPrice || { INR: 0, USD: 0, EUR: 0 },
+            sellingPrice: course.sellingPrice || { INR: 0, USD: 0, EUR: 0 }
+          };
+        });
         setCourses(formattedCourses);
       }
-    }).catch((error) => {
-      console.error('Error loading courses:', error);
+    }).catch(() => {
+      error('Failed to load courses.');
     }).finally(() => setLoading(false));
-  }, []);
+  }, [error]);
+
+  // Load courses on mount and when location changes (user navigates back)
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses, location.pathname]);
 
   // Filtering logic
   const filteredCourses = courses.filter((course) => {
@@ -164,6 +192,12 @@ const LearnLoopCourseManager: React.FC = () => {
       // Sort courseId as string (handles format like C-ABC-0001)
       aValue = (aValue || '').toString();
       bValue = (bValue || '').toString();
+    } else if (sortBy === 'creatorIdName') {
+      aValue = (a.creatorName || a.creatorId || '').toString().toLowerCase();
+      bValue = (b.creatorName || b.creatorId || '').toString().toLowerCase();
+    } else if (sortBy === 'userId') {
+      aValue = (a.instructorUserId || '').toString().toLowerCase();
+      bValue = (b.instructorUserId || '').toString().toLowerCase();
     } else if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
       bValue = bValue.toLowerCase();
@@ -192,6 +226,33 @@ const LearnLoopCourseManager: React.FC = () => {
     setMenuCourseId(null);
   };
 
+  const handleOpenAffiliates = (course: Course) => {
+    setAffiliatesCourseId(course.id);
+    setAffiliatesCourseName(course.name);
+    setAffiliatesDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleCloseAffiliates = () => {
+    setAffiliatesDialogOpen(false);
+    setAffiliatesCourseId(null);
+    setAffiliatesCourseName('');
+    setAffiliatesList([]);
+  };
+
+  useEffect(() => {
+    if (!affiliatesDialogOpen || !affiliatesCourseId) return;
+    setAffiliatesLoading(true);
+    courseService.getAffiliatesByCourse(affiliatesCourseId).then((r) => {
+      if (r.success && r.data) setAffiliatesList(r.data);
+      else setAffiliatesList([]);
+    }).finally(() => setAffiliatesLoading(false));
+  }, [affiliatesDialogOpen, affiliatesCourseId]);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => success('Link copied to clipboard')).catch(() => error('Failed to copy'));
+  };
+
   // Delete course handlers
   const handleDeleteClick = (course: Course) => {
     setCourseToDelete(course);
@@ -216,8 +277,7 @@ const LearnLoopCourseManager: React.FC = () => {
       } else {
         error(result.message || 'Failed to delete course');
       }
-    } catch (err) {
-      console.error('Error deleting course:', err);
+    } catch {
       error('Failed to delete course. Please try again.');
     } finally {
       setDeleting(false);
@@ -243,14 +303,25 @@ const LearnLoopCourseManager: React.FC = () => {
         <Typography variant="h4" fontWeight={700} color="#6C63FF">
           LearnLoop: Course Management
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', boxShadow: 1 }}
-          onClick={() => navigate('/love/learnloop/create')}
-        >
-          + Create Course
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+            onClick={() => loadCourses()}
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', boxShadow: 1 }}
+            onClick={() => navigate('/love/learnloop/create')}
+          >
+            + Create Course
+          </Button>
+        </Box>
       </Box>
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
@@ -334,7 +405,7 @@ const LearnLoopCourseManager: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              {['courseId', 'name', 'createdAt', 'type', 'access', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'actions'].map((col) => (
+              {tableColumns.map((col) => (
                 <TableCell key={col}>
                   {sortableColumns.includes(col) ? (
                     <TableSortLabel
@@ -355,99 +426,100 @@ const LearnLoopCourseManager: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={12} align="center">Loading...</TableCell>
+                <TableCell colSpan={tableColumns.length} align="center">Loading...</TableCell>
               </TableRow>
             ) : filteredCourses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} align="center">No courses found.</TableCell>
+                <TableCell colSpan={tableColumns.length} align="center">No courses found.</TableCell>
               </TableRow>
             ) : (
               sortedCourses.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((course) => (
                 <TableRow key={course.id} hover>
-                  <TableCell>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        fontFamily: 'monospace', 
-                        fontWeight: 600,
-                        color: '#6C63FF',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      {course.courseId || 'N/A'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{course.name}</TableCell>
-                  <TableCell>{new Date(course.createdAt).toLocaleDateString('en-GB')}</TableCell>
-                  <TableCell>
-                    <Chip label={course.type} color={typeColors[course.type]} size="small" />
-                  </TableCell>
-                  <TableCell>{accessLabel(course.access)}</TableCell>
-                  <TableCell>{course.enrollments}</TableCell>
-                  <TableCell>{course.completionRate > 0 ? `${course.completionRate}%` : '-'}</TableCell>
-                  <TableCell>
-                    <Chip label={course.status} color={statusColors[course.status]} size="small" />
-                  </TableCell>
-                  <TableCell>{new Date(course.lastUpdated).toLocaleDateString('en-GB')}</TableCell>
-                  <TableCell>
-                    <Tooltip title={course.visibility}>
-                      <>{visibilityIcons[course.visibility] || <Lock fontSize="small" color="disabled" />}</>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <Tooltip title="Certificate Enabled">
-                        <Box sx={{ color: course.certificateEnabled ? 'success.main' : 'text.disabled' }}>
-                          <CheckCircle fontSize="small" />
-                        </Box>
-                      </Tooltip>
-                      <Tooltip title="Drip Enabled">
-                        <Box sx={{ color: course.dripEnabled ? 'success.main' : 'text.disabled' }}>
-                          <CheckCircle fontSize="small" />
-                        </Box>
-                      </Tooltip>
-                      <Tooltip title="Installments On">
-                        <Box sx={{ color: course.installmentsOn ? 'success.main' : 'text.disabled' }}>
-                          <CheckCircle fontSize="small" />
-                        </Box>
-                      </Tooltip>
-                      <Tooltip title="Affiliate Active">
-                        <Box sx={{ color: course.affiliateActive ? 'success.main' : 'text.disabled' }}>
-                          <CheckCircle fontSize="small" />
-                        </Box>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <IconButton onClick={e => handleMenuOpen(e, course.id)}>
-                      <MoreVert />
-                    </IconButton>
-                    <Menu
-                      anchorEl={anchorEl}
-                      open={Boolean(anchorEl) && menuCourseId === course.id}
-                      onClose={handleMenuClose}
-                    >
-                      <MenuItem onClick={() => {
-                        handleMenuClose();
-                        navigate(`/love/learnloop/create/${course.id}`);
-                      }}><Edit fontSize="small" sx={{ mr: 1 }} />Edit</MenuItem>
-                      <MenuItem onClick={handleMenuClose}><Visibility fontSize="small" sx={{ mr: 1 }} />Preview</MenuItem>
-                      <MenuItem onClick={handleMenuClose}><FileCopy fontSize="small" sx={{ mr: 1 }} />Duplicate</MenuItem>
-                      <MenuItem onClick={handleMenuClose}><BarChart fontSize="small" sx={{ mr: 1 }} />Analytics</MenuItem>
-                      {course.status === 'Draft' || course.status === 'Paused' ? (
-                        <MenuItem onClick={() => handleDeleteClick(course)}><Delete fontSize="small" sx={{ mr: 1 }} />Delete</MenuItem>
-                      ) : null}
-                      {course.status === 'Published' ? (
-                        <MenuItem onClick={handleMenuClose}><Drafts fontSize="small" sx={{ mr: 1 }} />Save as Draft</MenuItem>
-                      ) : null}
-                      {course.status === 'Draft' ? (
-                        <MenuItem onClick={handleMenuClose}><PlayArrow fontSize="small" sx={{ mr: 1 }} />Publish</MenuItem>
-                      ) : null}
-                      {(course.status === 'Published' || course.status === 'Live & Selling') ? (
-                        <MenuItem onClick={handleMenuClose}><Pause fontSize="small" sx={{ mr: 1 }} />Pause</MenuItem>
-                      ) : null}
-                    </Menu>
-                  </TableCell>
+                  {tableColumns.map((col) => {
+                    if (col === 'courseId') {
+                      return (
+                        <TableCell key={col}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#6C63FF', fontSize: '0.875rem' }}>
+                            {course.courseId || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                      );
+                    }
+                    if (col === 'name') return <TableCell key={col}>{course.name}</TableCell>;
+                    if (col === 'creatorIdName') {
+                      const creatorId = course.creatorId || '';
+                      const creatorName = course.creatorName || '';
+                      const text = creatorId || creatorName ? `${creatorId}${creatorId && creatorName ? ' – ' : ''}${creatorName}`.trim() : '';
+                      return <TableCell key={col}>{text || 'N/A'}</TableCell>;
+                    }
+                    if (col === 'userId') {
+                      const text = course.instructorUserId || '';
+                      return <TableCell key={col}>{text || 'N/A'}</TableCell>;
+                    }
+                    if (col === 'createdAt') return <TableCell key={col}>{new Date(course.createdAt).toLocaleDateString('en-GB')}</TableCell>;
+                    if (col === 'type') return <TableCell key={col}><Chip label={course.type} color={typeColors[course.type]} size="small" /></TableCell>;
+                    if (col === 'access') return <TableCell key={col}>{accessLabel(course.access)}</TableCell>;
+                    if (col === 'enrollments') return <TableCell key={col}>{course.enrollments}</TableCell>;
+                    if (col === 'completionRate') return <TableCell key={col}>{course.completionRate > 0 ? `${course.completionRate}%` : '-'}</TableCell>;
+                    if (col === 'status') return <TableCell key={col}><Chip label={course.status} color={statusColors[course.status]} size="small" /></TableCell>;
+                    if (col === 'lastUpdated') {
+                      return (
+                        <TableCell key={col}>
+                          {course.lastUpdated
+                            ? new Date(course.lastUpdated).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '-'}
+                        </TableCell>
+                      );
+                    }
+                    if (col === 'visibility') {
+                      return (
+                        <TableCell key={col}>
+                          <Tooltip title={course.visibility}>
+                            <>{visibilityIcons[course.visibility] || <Lock fontSize="small" color="disabled" />}</>
+                          </Tooltip>
+                        </TableCell>
+                      );
+                    }
+                    if (col === 'features') {
+                      return (
+                        <TableCell key={col}>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Tooltip title="Certificate Enabled">
+                              <Box sx={{ color: course.certificateEnabled ? 'success.main' : 'text.disabled' }}><CheckCircle fontSize="small" /></Box>
+                            </Tooltip>
+                            <Tooltip title="Drip Enabled">
+                              <Box sx={{ color: course.dripEnabled ? 'success.main' : 'text.disabled' }}><CheckCircle fontSize="small" /></Box>
+                            </Tooltip>
+                            <Tooltip title="Installments On">
+                              <Box sx={{ color: course.installmentsOn ? 'success.main' : 'text.disabled' }}><CheckCircle fontSize="small" /></Box>
+                            </Tooltip>
+                            <Tooltip title="Affiliate Active">
+                              <Box sx={{ color: course.affiliateActive ? 'success.main' : 'text.disabled' }}><CheckCircle fontSize="small" /></Box>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      );
+                    }
+                    if (col === 'actions') {
+                      return (
+                        <TableCell key={col}>
+                          <IconButton onClick={e => handleMenuOpen(e, course.id)}><MoreVert /></IconButton>
+                          <Menu anchorEl={anchorEl} open={Boolean(anchorEl) && menuCourseId === course.id} onClose={handleMenuClose}>
+                            <MenuItem onClick={() => { handleMenuClose(); navigate(`/love/learnloop/create/${course.id}`); }}><Edit fontSize="small" sx={{ mr: 1 }} />Edit</MenuItem>
+                            <MenuItem onClick={() => { handleMenuClose(); navigate(`/love/learnloop/create/${course.id}?step=6`); }}><Visibility fontSize="small" sx={{ mr: 1 }} />Preview</MenuItem>
+                            <MenuItem onClick={() => handleOpenAffiliates(course)}><AffiliatesIcon fontSize="small" sx={{ mr: 1 }} />Affiliates</MenuItem>
+                            <MenuItem onClick={handleMenuClose}><FileCopy fontSize="small" sx={{ mr: 1 }} />Duplicate</MenuItem>
+                            <MenuItem onClick={handleMenuClose}><BarChart fontSize="small" sx={{ mr: 1 }} />Analytics</MenuItem>
+                            {course.status === 'Draft' || course.status === 'Paused' ? <MenuItem onClick={() => handleDeleteClick(course)}><Delete fontSize="small" sx={{ mr: 1 }} />Delete</MenuItem> : null}
+                            {course.status === 'Published' ? <MenuItem onClick={handleMenuClose}><Drafts fontSize="small" sx={{ mr: 1 }} />Save as Draft</MenuItem> : null}
+                            {course.status === 'Draft' ? <MenuItem onClick={handleMenuClose}><PlayArrow fontSize="small" sx={{ mr: 1 }} />Publish</MenuItem> : null}
+                            {(course.status === 'Published' || course.status === 'Live & Selling') ? <MenuItem onClick={handleMenuClose}><Pause fontSize="small" sx={{ mr: 1 }} />Pause</MenuItem> : null}
+                          </Menu>
+                        </TableCell>
+                      );
+                    }
+                    return <TableCell key={col} />;
+                  })}
                 </TableRow>
               ))
             )}
@@ -463,6 +535,51 @@ const LearnLoopCourseManager: React.FC = () => {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </TableContainer>
+
+      {/* Affiliates Dialog (creator view) */}
+      <Dialog open={affiliatesDialogOpen} onClose={handleCloseAffiliates} maxWidth="md" fullWidth>
+        <DialogTitle>Affiliates — {affiliatesCourseName}</DialogTitle>
+        <DialogContent>
+          {affiliatesLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress /></Box>
+          ) : affiliatesList.length === 0 ? (
+            <Typography color="text.secondary">No affiliates yet. Share your course; anyone can get an affiliate link from the course page.</Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Affiliate</TableCell>
+                    <TableCell>Link</TableCell>
+                    <TableCell align="right">Conversions</TableCell>
+                    <TableCell align="right">Earnings (INR)</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {affiliatesList.map((row) => (
+                    <TableRow key={row.affiliateCodeId}>
+                      <TableCell><Chip label={row.code} size="small" /></TableCell>
+                      <TableCell>{row.affiliateName || row.displayName || row.affiliateEmail || '-'}</TableCell>
+                      <TableCell>
+                        <Tooltip title="Copy link">
+                          <IconButton size="small" onClick={() => copyToClipboard(row.link)}><ContentCopy fontSize="small" /></IconButton>
+                        </Tooltip>
+                        <Typography variant="caption" sx={{ ml: 0.5, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>{row.link}</Typography>
+                      </TableCell>
+                      <TableCell align="right">{row.conversions}</TableCell>
+                      <TableCell align="right">₹{(row.earningsByCurrency?.INR ?? 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAffiliates}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog

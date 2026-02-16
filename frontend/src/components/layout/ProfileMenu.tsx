@@ -9,7 +9,6 @@ import {
   Divider,
   Box,
   Typography,
-  useTheme,
   Dialog,
   DialogContent,
   styled,
@@ -17,23 +16,20 @@ import {
   Button
 } from '@mui/material';
 import {
-  AccountCircle,
   Logout,
   Settings,
   Person,
   Close as CloseIcon,
   Notifications as NotificationsIcon,
   FiberManualRecord,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  InfoOutlined,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import FuturisticProfile from '../profile/FuturisticProfile';
-import { User } from '../../services/userService';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import api from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- theme required by MUI styled API
 const StyledDialog = styled(Dialog)(({ theme }) => ({
   '& .MuiDialog-paper': {
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -59,12 +55,12 @@ interface Notification {
 }
 
 const ProfileMenu: React.FC = () => {
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { user: authUser, logout, updateUser } = useAuth();
   const user = authUser;
-  const theme = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -77,7 +73,6 @@ const ProfileMenu: React.FC = () => {
         setNotifications(res.data.notifications || []);
         const unread = (res.data.notifications || []).filter((n: any) => !n.read).length;
         setUnreadCount(unread);
-        console.log('[ProfileMenu] In-app notifications:', res.data.notifications);
       })
       .catch(() => {
         setNotifications([]);
@@ -298,7 +293,15 @@ const ProfileMenu: React.FC = () => {
                 <Typography variant="h6" color="text.secondary">No Notification Yet</Typography>
               </Box>
             ) : (
-              notifications.map((n, idx) => (
+              notifications.map((n, idx) => {
+                const isKycNotification = /kyc|KYC/i.test(n.title || '') || /kyc|KYC/i.test(n.message || '');
+                const handleNotificationClick = () => {
+                  if (isKycNotification) {
+                    setNotificationsOpen(false);
+                    navigate('/kyc');
+                  }
+                };
+                return (
                 <motion.div
                   key={n._id}
                   initial={{ opacity: 0, y: 30 }}
@@ -306,18 +309,22 @@ const ProfileMenu: React.FC = () => {
                   transition={{ duration: 0.5, delay: idx * 0.08, type: 'spring', stiffness: 120 }}
                   style={{ width: '100%' }}
                 >
-                  <Box sx={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 2,
-                    mb: 3,
-                    p: 2.5,
-                    borderRadius: 3,
-                    background: !n.read ? 'linear-gradient(90deg, #fff 80%, #f3f6fa 100%)' : '#f8fafc',
-                    boxShadow: !n.read ? '0 2px 12px 0 rgba(108,99,255,0.06)' : 'none',
-                    borderLeft: !n.read ? '4px solid #6C63FF' : '4px solid #e9eefa',
-                    transition: 'background 0.2s',
-                  }}>
+                  <Box
+                    onClick={isKycNotification ? handleNotificationClick : undefined}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      mb: 3,
+                      p: 2.5,
+                      borderRadius: 3,
+                      background: !n.read ? 'linear-gradient(90deg, #fff 80%, #f3f6fa 100%)' : '#f8fafc',
+                      boxShadow: !n.read ? '0 2px 12px 0 rgba(108,99,255,0.06)' : 'none',
+                      borderLeft: !n.read ? '4px solid #6C63FF' : '4px solid #e9eefa',
+                      transition: 'background 0.2s',
+                      ...(isKycNotification && { cursor: 'pointer', '&:hover': { background: 'rgba(108,99,255,0.08)' } }),
+                    }}
+                  >
                     <Box sx={{ mt: 0.5 }}><NotificationsIcon color={n.read ? 'disabled' : 'warning'} /></Box>
                     <Box sx={{ flex: 1 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 700, color: !n.read ? '#6C63FF' : '#222' }}>{n.title}</Typography>
@@ -329,7 +336,7 @@ const ProfileMenu: React.FC = () => {
                     {!n.read && <FiberManualRecord color="warning" sx={{ fontSize: 16, mt: 0.5 }} />}
                   </Box>
                 </motion.div>
-              ))
+              ); })
             )}
           </Box>
         </DialogContent>

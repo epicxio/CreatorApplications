@@ -1,17 +1,22 @@
 import React, { useState, Suspense, Component, ReactNode } from 'react';
-import { Box, Container, Typography, Paper, IconButton, Tooltip, Button, Stack, TextField, MenuItem, Chip, InputLabel, Select, FormControl, OutlinedInput, CircularProgress } from '@mui/material';
+import { Box, Container, Typography, Paper, Tooltip, Button, Stack, TextField, MenuItem, Chip, InputLabel, Select, FormControl, OutlinedInput, CircularProgress } from '@mui/material';
 import { styled } from '@mui/system';
-import { CheckCircle, RadioButtonUnchecked, ArrowForward, ArrowBack, ArrowUpward, ArrowDownward, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { CheckCircle, RadioButtonUnchecked, ArrowForward, ArrowBack, Visibility as VisibilityIcon, Save as SaveIcon } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { courseService } from '../../services/courseService';
-
+import { generateCertificateBlob, type CertificateData } from '../../utils/pdfCertificateGenerator';
+import { compressDataUrlImage } from '../../utils/imageCompression';
+import sealImageAsset from '../../assets/seal.png';
 import CurriculumStep from './CurriculumStep';
 // import DripContentStep from './DripContentStep';
 // import CertificateStep from './CertificateStep';
 import PreviewPublishStep from './PreviewPublishStep';
 import { useToast } from '../../hooks/useToast';
 import ToastNotification from '../common/ToastNotification';
+import { DripMethod } from './DripContentStep';
+import type { PaymentDetailsPayload, PaymentDetailsInitialData, PaymentDetailsStepRef } from './PaymentDetailsStep';
+import type { AdditionalDetailsStepRef, AdditionalDetailsInitialData, AdditionalDetailsPayload } from './AdditionalDetailsStep';
 
 // Lazy load heavy components
 const DripContentStep = React.lazy(() => import('./DripContentStep'));
@@ -19,7 +24,31 @@ const CertificateStep = React.lazy(() => import('./CertificateStep'));
 const PaymentDetailsStep = React.lazy(() => import('./PaymentDetailsStep'));
 const AdditionalDetailsStep = React.lazy(() => import('./AdditionalDetailsStep'));
 
-
+/** Load the seal image asset and return as data URL for PDF generation (so the actual seal shows instead of a fallback circle). */
+function getSealDataUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve('');
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve('');
+      }
+    };
+    img.onerror = () => resolve('');
+    img.src = typeof sealImageAsset === 'string' ? sealImageAsset : (sealImageAsset as { default?: string })?.default ?? '';
+  });
+}
 
 const steps = [
   'Course Details',
@@ -29,16 +58,6 @@ const steps = [
   'Payment Details',
   'Additional Details',
   'Preview & Publish',
-];
-
-const stepThemes = [
-  'linear-gradient(135deg, #00FFC6 0%, #6C63FF 100%)', // Course Details
-  'linear-gradient(135deg, #6C63FF 0%, #00BFFF 100%)', // Curriculum
-  'linear-gradient(135deg, #00BFFF 0%, #FF6B6B 100%)', // Drip Content
-  'linear-gradient(135deg, #FF6B6B 0%, #FFD600 100%)', // Certificate
-  'linear-gradient(135deg, #FFD600 0%, #00FFC6 100%)', // Payment
-  'linear-gradient(135deg, #00FFC6 0%, #6C63FF 100%)', // Additional
-  'linear-gradient(135deg, #6C63FF 0%, #00FFC6 100%)', // Preview
 ];
 
 const GlassPanel = styled(Paper)(({ theme }) => ({
@@ -95,16 +114,6 @@ const StepOrb = styled(motion.div)<{ active: boolean; completed: boolean }>(
   })
 );
 
-const AnimatedRail = styled(motion.div)(({ theme }) => ({
-  width: 6,
-  background: 'linear-gradient(180deg, #00FFC6 0%, #6C63FF 100%)',
-  borderRadius: 3,
-  position: 'absolute',
-  left: '50%',
-  top: 32,
-  zIndex: 1,
-}));
-
 const StepLabelBox = styled(Box)(({ theme }) => ({
   marginLeft: 64,
   marginBottom: theme.spacing(2),
@@ -113,6 +122,7 @@ const StepLabelBox = styled(Box)(({ theme }) => ({
   alignItems: 'center',
 }));
 
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars -- theme required by styled API
 const FloatingLabel = styled(motion.div)(({ theme }) => ({
   position: 'absolute',
   right: 80,
@@ -147,14 +157,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: any) {
-    console.error('ErrorBoundary caught an error:', error);
+  static getDerivedStateFromError(_error: any) {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error details:', error);
-    console.error('Error info:', errorInfo);
+  componentDidCatch(_error: Error, _errorInfo: React.ErrorInfo) {
+    // Error logged by ErrorBoundary for debugging
   }
 
   render() {
@@ -292,9 +300,11 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   const [loadingStep, setLoadingStep] = React.useState(false);
   const [loadingCourse, setLoadingCourse] = React.useState(false);
   const [isSavingBeforeLeave, setIsSavingBeforeLeave] = React.useState(false);
-  const mainRef = React.useRef<HTMLDivElement>(null);
-  const builderRef = React.useRef<HTMLDivElement>(null);
   const hasUnsavedChanges = React.useRef(false);
+  
+  // Check if we're in preview-only mode (coming from course manager)
+  const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const isPreviewMode = searchParams.get('step') === '6' && urlCourseId;
 
 
 
@@ -303,7 +313,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [cover, setCover] = useState<string | null>(null);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [, setCoverFile] = useState<File | null>(null);
   const [category, setCategory] = useState('');
   const [level, setLevel] = useState('');
   const [language, setLanguage] = useState('');
@@ -311,6 +321,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   const [visibility, setVisibility] = useState('Public');
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const [saving, setSaving] = useState(false);
+  const [savingPaymentSettings, setSavingPaymentSettings] = useState(false);
 
   // Curriculum state (Step 1)
   const [modules, setModules] = useState<Array<{
@@ -328,6 +339,90 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     }>;
     [key: string]: any;
   }>>([]);
+
+  // Drip Content state (Step 2) - Declared early for use in buildDraftPayload
+  const [dripEnabled, setDripEnabled] = useState(false);
+  const dripEnabledRef = React.useRef(dripEnabled);
+  const [dripMethods, setDripMethods] = useState<DripMethod[]>([]);
+  const [dripDisplayOption, setDripDisplayOption] = useState<'title' | 'titleAndLessons' | 'hide'>('titleAndLessons');
+  const dripDisplayOptionRef = React.useRef(dripDisplayOption);
+  const [dripHideUnlockDate, setDripHideUnlockDate] = useState(false);
+  const dripHideUnlockDateRef = React.useRef(dripHideUnlockDate);
+  const [dripSendCommunication, setDripSendCommunication] = useState(false);
+  const dripSendCommunicationRef = React.useRef(dripSendCommunication);
+
+  // Certificate state (Step 3) - declared early so buildDraftPayload can use it
+  const [certificateEnabled, setCertificateEnabled] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('1');
+  const [certificateTitle, setCertificateTitle] = useState('Certificate of Completion');
+  const [certificateDescription, setCertificateDescription] = useState('This is to certify that [Name] has successfully completed the course');
+  const [completionPercentage, setCompletionPercentage] = useState(100);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [certificateApplicationLogoUrl, setCertificateApplicationLogoUrl] = useState<string | null>(null);
+  const [applicationLogoEnabled, setApplicationLogoEnabled] = useState(true);
+  const [signatures, setSignatures] = useState<Array<{
+    id: string;
+    name: string;
+    designation: string;
+    type: 'upload' | 'draw';
+    image?: string;
+    enabled: boolean;
+    isDefault?: boolean;
+  }>>([]);
+  const [creatorLogoFile, setCreatorLogoFile] = useState<File | null>(null);
+  const [certificateCreatorLogoUrl, setCertificateCreatorLogoUrl] = useState<string | null>(null);
+  const [templatePdfFile, setTemplatePdfFile] = useState<File | null>(null);
+  const [certificateTemplatePdfUrl, setCertificateTemplatePdfUrl] = useState<string | null>(null);
+  const [certificatePreviewKey, setCertificatePreviewKey] = useState<number>(0);
+
+  // Payment Details (Step 4) - initial data for hydration when course loads; last-known for draft when not on step 4
+  const [paymentDetailsInitialData, setPaymentDetailsInitialData] = useState<PaymentDetailsInitialData | null>(null);
+  const [paymentDetailsForDraft, setPaymentDetailsForDraft] = useState<PaymentDetailsPayload | null>(null);
+  const paymentDetailsStepRef = React.useRef<PaymentDetailsStepRef | null>(null);
+
+  // Additional Details (Step 5) - same pattern as Step 4
+  const [additionalDetailsInitialData, setAdditionalDetailsInitialData] = useState<AdditionalDetailsInitialData | null>(null);
+  const [additionalDetailsForDraft, setAdditionalDetailsForDraft] = useState<AdditionalDetailsPayload | null>(null);
+  const additionalDetailsStepRef = React.useRef<AdditionalDetailsStepRef | null>(null);
+  const [savingAdditionalSettings, setSavingAdditionalSettings] = useState(false);
+
+  // Update refs whenever state changes
+  React.useEffect(() => {
+    dripEnabledRef.current = dripEnabled;
+  }, [dripEnabled]);
+
+  React.useEffect(() => {
+    dripDisplayOptionRef.current = dripDisplayOption;
+  }, [dripDisplayOption]);
+
+  React.useEffect(() => {
+    dripHideUnlockDateRef.current = dripHideUnlockDate;
+  }, [dripHideUnlockDate]);
+
+  React.useEffect(() => {
+    dripSendCommunicationRef.current = dripSendCommunication;
+  }, [dripSendCommunication]);
+
+  // Wrapper functions to handle drip content changes with immediate ref updates
+  const handleDripEnabledChange = React.useCallback((enabled: boolean) => {
+    setDripEnabled(enabled);
+    dripEnabledRef.current = enabled; // Update ref immediately
+  }, []);
+
+  const handleDripDisplayOptionChange = React.useCallback((option: 'title' | 'titleAndLessons' | 'hide') => {
+    setDripDisplayOption(option);
+    dripDisplayOptionRef.current = option; // Update ref immediately
+  }, []);
+
+  const handleDripHideUnlockDateChange = React.useCallback((hide: boolean) => {
+    setDripHideUnlockDate(hide);
+    dripHideUnlockDateRef.current = hide; // Update ref immediately
+  }, []);
+
+  const handleDripSendCommunicationChange = React.useCallback((send: boolean) => {
+    setDripSendCommunication(send);
+    dripSendCommunicationRef.current = send; // Update ref immediately
+  }, []);
 
   // Keyboard navigation
   React.useEffect(() => {
@@ -362,7 +457,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   };
 
   // Auto-save functionality
-  const [autoSaveEnabled, setAutoSaveEnabled] = React.useState(true);
+  const [autoSaveEnabled] = React.useState(true);
   const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
 
 
@@ -400,7 +495,18 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   // Load existing course data when editing
   React.useEffect(() => {
     const loadCourse = async () => {
-      if (!urlCourseId) return; // No course ID in URL, creating new course
+      if (!urlCourseId) {
+        // Check for step parameter in URL for new courses
+        const searchParams = new URLSearchParams(location.search);
+        const stepParam = searchParams.get('step');
+        if (stepParam) {
+          const stepIndex = parseInt(stepParam, 10);
+          if (!isNaN(stepIndex) && stepIndex >= 0 && stepIndex < steps.length) {
+            setActiveStep(stepIndex);
+          }
+        }
+        return; // No course ID in URL, creating new course
+      }
       
       setLoadingCourse(true);
       try {
@@ -424,13 +530,137 @@ const CourseBuilderPage: React.FC = React.memo(() => {
             setCover(course.coverImage);
           }
           
-          // Set courseId state
-          setCourseId(course.id);
+          // Set courseId state - use formatted courseId if available, otherwise use MongoDB _id
+          setCourseId(course.courseId || course.id);
+          
+          // Load drip content settings
+          if (course.dripEnabled !== undefined) {
+            setDripEnabled(course.dripEnabled);
+          }
+          if (course.dripMethods && Array.isArray(course.dripMethods)) {
+            // Map backend dripMethods to frontend format
+            const mappedDripMethods = course.dripMethods.map((dm: any) => ({
+              id: dm.moduleId, // Use moduleId as id
+              method: dm.method,
+              action: dm.method === 'date' && dm.action
+                ? new Date(dm.action).toISOString().slice(0, 16) // Convert to datetime-local format
+                : dm.action // number for days, undefined for immediate
+            }));
+            setDripMethods(mappedDripMethods);
+          }
+          if (course.dripDisplayOption) {
+            setDripDisplayOption(course.dripDisplayOption);
+          }
+          if (course.dripHideUnlockDate !== undefined) {
+            setDripHideUnlockDate(course.dripHideUnlockDate);
+          }
+          if (course.dripSendCommunication !== undefined) {
+            setDripSendCommunication(course.dripSendCommunication);
+          }
+          
+          // Check for step parameter in URL and navigate to that step after course loads
+          const searchParams = new URLSearchParams(location.search);
+          const stepParam = searchParams.get('step');
+          if (stepParam) {
+            const stepIndex = parseInt(stepParam, 10);
+            if (!isNaN(stepIndex) && stepIndex >= 0 && stepIndex < steps.length) {
+              setActiveStep(stepIndex);
+            }
+          }
           
           // Set certificate settings if available
           if (course.certificateEnabled !== undefined) {
             setCertificateEnabled(course.certificateEnabled);
           }
+          if (course.certificateTemplate) {
+            setSelectedTemplate(course.certificateTemplate);
+          }
+          if (course.certificateTitle) {
+            setCertificateTitle(course.certificateTitle);
+          }
+          if (course.certificateDescription) {
+            setCertificateDescription(course.certificateDescription);
+          }
+          if (course.certificateCompletionPercentage !== undefined && course.certificateCompletionPercentage !== null) {
+            setCompletionPercentage(course.certificateCompletionPercentage);
+          }
+          if (course.certificateApplicationLogoEnabled !== undefined) {
+            setApplicationLogoEnabled(course.certificateApplicationLogoEnabled);
+          }
+          if (course.certificateApplicationLogo) {
+            setCertificateApplicationLogoUrl(course.certificateApplicationLogo);
+          }
+          if (course.certificateSignatures && Array.isArray(course.certificateSignatures)) {
+            setSignatures(course.certificateSignatures.map((sig: any, idx: number) => ({
+              id: sig._id || `sig-${idx}`,
+              name: sig.name || '',
+              designation: sig.designation || '',
+              type: (sig.type === 'draw' || sig.type === 'upload' ? sig.type : 'upload') as 'upload' | 'draw',
+              image: sig.image,
+              enabled: sig.enabled !== false,
+              isDefault: sig.isDefault || false
+            })));
+          }
+          if (course.certificateCreatorLogo) {
+            setCertificateCreatorLogoUrl(course.certificateCreatorLogo);
+          }
+          if (course.certificateTemplatePdfUrl) {
+            setCertificateTemplatePdfUrl(course.certificateTemplatePdfUrl);
+          }
+
+          // Payment Details (Step 4) - include enabledCurrencies so currency toggles persist
+          const listedPrice = course.listedPrice || { INR: 0, USD: 0, EUR: 0, GBP: 0 };
+          const sellingPrice = course.sellingPrice || { INR: 0, USD: 0, EUR: 0, GBP: 0 };
+          const defaultEnabledCurrencies = { INR: true, USD: true, EUR: true, GBP: true };
+          const enabledCurrencies = (course.enabledCurrencies && typeof course.enabledCurrencies === 'object')
+            ? { ...defaultEnabledCurrencies, ...course.enabledCurrencies }
+            : defaultEnabledCurrencies;
+          setPaymentDetailsInitialData({
+            listedPrice: { INR: listedPrice.INR ?? 0, USD: listedPrice.USD ?? 0, EUR: listedPrice.EUR ?? 0, GBP: listedPrice.GBP ?? 0 },
+            sellingPrice: { INR: sellingPrice.INR ?? 0, USD: sellingPrice.USD ?? 0, EUR: sellingPrice.EUR ?? 0, GBP: sellingPrice.GBP ?? 0 },
+            globalPricingEnabled: course.globalPricingEnabled !== false,
+            currencySpecificPricingEnabled: !!course.currencySpecificPricingEnabled,
+            enabledCurrencies,
+            installmentsOn: !!course.installmentsOn,
+            installmentPeriod: course.installmentPeriod ?? 30,
+            numberOfInstallments: course.numberOfInstallments ?? 3,
+            bufferTime: course.bufferTime ?? 7,
+            paymentMethods: (course.paymentMethods && typeof course.paymentMethods === 'object') ? { ...course.paymentMethods } : {},
+            requirePaymentBeforeAccess: course.requirePaymentBeforeAccess !== false,
+            sendPaymentReceipts: course.sendPaymentReceipts !== false,
+            enableAutomaticInvoicing: !!course.enableAutomaticInvoicing
+          });
+          setPaymentDetailsForDraft({
+            listedPrice: { INR: listedPrice.INR ?? 0, USD: listedPrice.USD ?? 0, EUR: listedPrice.EUR ?? 0, GBP: listedPrice.GBP ?? 0 },
+            sellingPrice: { INR: sellingPrice.INR ?? 0, USD: sellingPrice.USD ?? 0, EUR: sellingPrice.EUR ?? 0, GBP: sellingPrice.GBP ?? 0 },
+            globalPricingEnabled: course.globalPricingEnabled !== false,
+            currencySpecificPricingEnabled: !!course.currencySpecificPricingEnabled,
+            enabledCurrencies,
+            installmentsOn: !!course.installmentsOn,
+            installmentPeriod: course.installmentPeriod ?? 30,
+            numberOfInstallments: course.numberOfInstallments ?? 3,
+            bufferTime: course.bufferTime ?? 7,
+            paymentMethods: (course.paymentMethods && typeof course.paymentMethods === 'object') ? { ...course.paymentMethods } : {},
+            requirePaymentBeforeAccess: course.requirePaymentBeforeAccess !== false,
+            sendPaymentReceipts: course.sendPaymentReceipts !== false,
+            enableAutomaticInvoicing: !!course.enableAutomaticInvoicing
+          });
+
+          // Additional Details (Step 5)
+          const courseFaqs = course.faqs && Array.isArray(course.faqs) ? course.faqs : [];
+          const additionalInitial: AdditionalDetailsInitialData = {
+            faqs: courseFaqs,
+            affiliateRewardEnabled: !!course.affiliateActive,
+            affiliateRewardPercentage: course.affiliateRewardPercentage != null ? String(course.affiliateRewardPercentage) : '10',
+            watermarkRemovalEnabled: !!course.watermarkRemovalEnabled
+          };
+          setAdditionalDetailsInitialData(additionalInitial);
+          setAdditionalDetailsForDraft({
+            faqs: courseFaqs,
+            affiliateActive: !!course.affiliateActive,
+            affiliateRewardPercentage: typeof course.affiliateRewardPercentage === 'number' ? course.affiliateRewardPercentage : 10,
+            watermarkRemovalEnabled: !!course.watermarkRemovalEnabled
+          });
           
           // Load modules/curriculum if available
           if (course.modules && Array.isArray(course.modules)) {
@@ -551,8 +781,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
         } else {
           error(response.message || 'Failed to load course');
         }
-      } catch (err: any) {
-        console.error('Error loading course:', err);
+      } catch {
         error('Failed to load course. Please try again.');
       } finally {
         setLoadingCourse(false);
@@ -586,7 +815,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     return 'other';
   }, []);
 
-  const buildDraftPayload = React.useCallback(() => {
+  const buildDraftPayload = React.useCallback((overridePayment?: PaymentDetailsPayload | null, overrideAdditional?: AdditionalDetailsPayload | null) => {
     const preparedModules = modules && modules.length > 0
       ? modules
           .filter(module => module.title && module.title.trim() !== '')
@@ -620,8 +849,6 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                 if (lesson.type === 'Text') {
                   if (lessonData.description && lessonData.description.trim() !== '') {
                     content.textContent = lessonData.description;
-                  } else if (content.textContent) {
-                    content.textContent = content.textContent;
                   }
                 }
 
@@ -740,28 +967,83 @@ const CourseBuilderPage: React.FC = React.memo(() => {
       visibility: (visibility || 'Public') as 'Public' | 'Unlisted' | 'Private',
       coverImage: cover || null,
       modules: preparedModules,
-      status: 'Draft' as const
+      // Drip Content - Use ref to ensure we get the latest value
+      dripEnabled: (() => {
+        const currentValue = dripEnabledRef.current;
+        return currentValue || false;
+      })(),
+      dripMethods: dripEnabledRef.current && dripMethods.length > 0 ? dripMethods.map(method => ({
+        moduleId: method.id,
+        method: method.method,
+        action: method.method === 'date' && method.action 
+          ? new Date(method.action as string).toISOString()
+          : method.action, // number for days, undefined for immediate
+        unlockDate: method.method === 'date' && method.action
+          ? new Date(method.action as string)
+          : undefined
+      })) : [],
+      dripDisplayOption: (() => {
+        const currentValue = dripDisplayOptionRef.current;
+        return currentValue || 'titleAndLessons';
+      })(),
+      dripHideUnlockDate: (() => {
+        const currentValue = dripHideUnlockDateRef.current;
+        return currentValue || false;
+      })(),
+      dripSendCommunication: (() => {
+        const currentValue = dripSendCommunicationRef.current;
+        return currentValue || false;
+      })(),
+      // Step 3: Certificate
+      certificateEnabled: certificateEnabled ?? false,
+      certificateTemplate: selectedTemplate || '1',
+      certificateTitle: certificateTitle || 'Certificate of Completion',
+      certificateDescription: certificateDescription || 'This is to certify that [Name] has successfully completed the course',
+      certificateCompletionPercentage: completionPercentage ?? 100,
+      certificateApplicationLogoEnabled: applicationLogoEnabled ?? true,
+      certificateApplicationLogo: certificateApplicationLogoUrl || undefined,
+      certificateSignatures: (signatures || []).map((sig) => ({
+        name: sig.name || '',
+        designation: sig.designation || '',
+        type: sig.type || 'upload',
+        image: sig.image || undefined,
+        enabled: sig.enabled !== false,
+        isDefault: sig.isDefault || false
+      })),
+      certificateCreatorLogo: certificateCreatorLogoUrl || undefined,
+      status: 'Draft' as const,
+      // Step 4: Payment Details
+      ...(overridePayment ?? paymentDetailsForDraft ? {
+        listedPrice: (overridePayment ?? paymentDetailsForDraft)!.listedPrice,
+        sellingPrice: (overridePayment ?? paymentDetailsForDraft)!.sellingPrice,
+        globalPricingEnabled: (overridePayment ?? paymentDetailsForDraft)!.globalPricingEnabled,
+        currencySpecificPricingEnabled: (overridePayment ?? paymentDetailsForDraft)!.currencySpecificPricingEnabled,
+        enabledCurrencies: (overridePayment ?? paymentDetailsForDraft)!.enabledCurrencies,
+        installmentsOn: (overridePayment ?? paymentDetailsForDraft)!.installmentsOn,
+        installmentPeriod: (overridePayment ?? paymentDetailsForDraft)!.installmentPeriod,
+        numberOfInstallments: (overridePayment ?? paymentDetailsForDraft)!.numberOfInstallments,
+        bufferTime: (overridePayment ?? paymentDetailsForDraft)!.bufferTime,
+        paymentMethods: (overridePayment ?? paymentDetailsForDraft)!.paymentMethods,
+        requirePaymentBeforeAccess: (overridePayment ?? paymentDetailsForDraft)!.requirePaymentBeforeAccess,
+        sendPaymentReceipts: (overridePayment ?? paymentDetailsForDraft)!.sendPaymentReceipts,
+        enableAutomaticInvoicing: (overridePayment ?? paymentDetailsForDraft)!.enableAutomaticInvoicing
+      } : {}),
+      // Step 5: Additional Details (always send explicit values so backend persists affiliate/watermark)
+      ...(overrideAdditional ?? additionalDetailsForDraft
+        ? {
+            faqs: (overrideAdditional ?? additionalDetailsForDraft)!.faqs,
+            affiliateActive: Boolean((overrideAdditional ?? additionalDetailsForDraft)!.affiliateActive),
+            affiliateRewardPercentage: Number((overrideAdditional ?? additionalDetailsForDraft)!.affiliateRewardPercentage) || 0,
+            watermarkRemovalEnabled: Boolean((overrideAdditional ?? additionalDetailsForDraft)!.watermarkRemovalEnabled)
+          }
+        : {}
+      )
     };
-  }, [modules, title, subtitle, description, category, level, language, tags, visibility, cover, getResourceType]);
+  }, [modules, title, subtitle, description, category, level, language, tags, visibility, cover, getResourceType, dripMethods, certificateEnabled, selectedTemplate, certificateTitle, certificateDescription, completionPercentage, applicationLogoEnabled, signatures, certificateCreatorLogoUrl, certificateApplicationLogoUrl, paymentDetailsForDraft, additionalDetailsForDraft]);
 
-  const logDraftSummary = React.useCallback(
-    (mode: 'manual' | 'auto', payload: any) => {
-      if (process.env.NODE_ENV === 'production') {
-        return;
-      }
-
-      const modulesCount = payload.modules?.length || 0;
-      const totalLessons = payload.modules?.reduce((sum: number, module: any) => sum + (module.lessons?.length || 0), 0) || 0;
-
-      console.log(`💾 ${mode === 'manual' ? 'Manual' : 'Auto'} Save Draft - Summary:`, {
-        courseId: courseId || 'new',
-        hasTitle: !!payload.name && payload.name !== 'Untitled course',
-        modulesCount,
-        totalLessons
-      });
-    },
-    [courseId]
-  );
+  const logDraftSummary = React.useCallback((_mode: 'manual' | 'auto', _payload: any) => {
+    // Optional: log draft summary in development only
+  }, []);
 
   // Save draft function (reusable for auto-save and before navigation)
   const saveDraftBeforeLeave = React.useCallback(async (silent: boolean = false): Promise<boolean> => {
@@ -776,14 +1058,22 @@ const CourseBuilderPage: React.FC = React.memo(() => {
         setIsSavingBeforeLeave(true);
       }
 
-      const draftData = buildDraftPayload();
+      const paymentFromStep = paymentDetailsStepRef.current?.getPaymentDetails?.();
+      if (paymentFromStep) setPaymentDetailsForDraft(paymentFromStep);
+      const additionalFromStep = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+      if (additionalFromStep) setAdditionalDetailsForDraft(additionalFromStep);
+      const draftData = buildDraftPayload(paymentFromStep ?? undefined, additionalFromStep ?? undefined);
       logDraftSummary('auto', draftData);
 
       const result = await courseService.saveDraft(courseId, draftData as any);
 
       if (result.success && result.data) {
         if (!courseId && result.data._id) {
-          setCourseId(result.data._id);
+          // Use formatted courseId if available, otherwise use MongoDB _id
+          setCourseId(result.data.courseId || result.data._id);
+        } else if (courseId && result.data.courseId && result.data.courseId !== courseId) {
+          // Update courseId if it was just generated
+          setCourseId(result.data.courseId);
         }
         setLastSaved(new Date());
         hasUnsavedChanges.current = false;
@@ -797,8 +1087,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
         error(result.message || 'Failed to save draft');
       }
       return false;
-    } catch (saveError) {
-      console.error('Failed to save draft before leaving:', saveError);
+    } catch {
       if (!silent) {
         error('Failed to save draft before leaving');
       }
@@ -820,80 +1109,268 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     }
   };
 
-  // Save as draft function
-  const handleSaveDraft = async () => {
-    if (saving) {
+  // Save payment settings only (pushes payment data to backend/collections)
+  const handleSavePaymentSettings = React.useCallback(async () => {
+    const paymentFromStep = paymentDetailsStepRef.current?.getPaymentDetails?.();
+    if (!paymentFromStep) {
+      error('Unable to read payment settings. Please try again.');
       return;
+    }
+    setPaymentDetailsForDraft(paymentFromStep);
+    const additionalFromStep = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+    const draftData = buildDraftPayload(paymentFromStep, additionalFromStep ?? undefined);
+    setSavingPaymentSettings(true);
+    try {
+      const result = await courseService.saveDraft(courseId, draftData as any);
+      if (result.success) {
+        if (result.data && (result.data.courseId || result.data._id) && !courseId) {
+          setCourseId(result.data.courseId || result.data._id);
+        }
+        setLastSaved(new Date());
+        hasUnsavedChanges.current = false;
+        setPaymentDetailsInitialData({ ...paymentFromStep });
+        success('Payment settings saved successfully!');
+      } else {
+        error(result.message || 'Failed to save payment settings');
+      }
+    } catch {
+      error('Failed to save payment settings');
+    } finally {
+      setSavingPaymentSettings(false);
+    }
+  }, [buildDraftPayload, courseId, success, error]);
+
+  const handleSaveAdditionalSettings = React.useCallback(async () => {
+    const additionalFromStep = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+    if (!additionalFromStep) {
+      error('Unable to read additional details. Please try again.');
+      return;
+    }
+    setAdditionalDetailsForDraft(additionalFromStep);
+    const paymentFromStep = paymentDetailsStepRef.current?.getPaymentDetails?.();
+    const draftData = buildDraftPayload(paymentFromStep ?? undefined, additionalFromStep);
+    setSavingAdditionalSettings(true);
+    try {
+      const result = await courseService.saveDraft(courseId, draftData as any);
+      if (result.success) {
+        if (result.data && (result.data.courseId || result.data._id) && !courseId) {
+          setCourseId(result.data.courseId || result.data._id);
+        }
+        setLastSaved(new Date());
+        hasUnsavedChanges.current = false;
+        setAdditionalDetailsInitialData({
+          faqs: additionalFromStep.faqs,
+          affiliateRewardEnabled: additionalFromStep.affiliateActive,
+          affiliateRewardPercentage: String(additionalFromStep.affiliateRewardPercentage),
+          watermarkRemovalEnabled: additionalFromStep.watermarkRemovalEnabled
+        });
+        success('Additional settings saved successfully!');
+      } else {
+        error(result.message || 'Failed to save additional settings');
+      }
+    } catch {
+      error('Failed to save additional settings');
+    } finally {
+      setSavingAdditionalSettings(false);
+    }
+  }, [buildDraftPayload, courseId, success, error]);
+
+  // Save as draft function. Returns true if save succeeded (for use before publish).
+  const handleSaveDraft = async (): Promise<boolean> => {
+    if (saving) {
+      return false;
     }
 
     setSaving(true);
     try {
-      const draftData = buildDraftPayload();
+      const paymentFromStep = paymentDetailsStepRef.current?.getPaymentDetails?.();
+      if (paymentFromStep) setPaymentDetailsForDraft(paymentFromStep);
+      const additionalFromStep = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+      if (additionalFromStep) setAdditionalDetailsForDraft(additionalFromStep);
+      const draftData = buildDraftPayload(paymentFromStep ?? undefined, additionalFromStep ?? undefined);
       logDraftSummary('manual', draftData);
 
       const result = await courseService.saveDraft(courseId, draftData as any);
 
       if (result.success) {
         if (result.data && result.data._id && !courseId) {
-          setCourseId(result.data._id);
+          // Use formatted courseId if available, otherwise use MongoDB _id
+          setCourseId(result.data.courseId || result.data._id);
+        } else if (courseId && result.data && result.data.courseId && result.data.courseId !== courseId) {
+          // Update courseId if it was just generated
+          setCourseId(result.data.courseId);
         }
         setLastSaved(new Date());
         hasUnsavedChanges.current = false;
+        // Keep payment initial data in sync so returning to step 4 shows saved payment
+        if (paymentFromStep) {
+          setPaymentDetailsInitialData({ ...paymentFromStep });
+        }
         success('Draft saved successfully!');
-        console.log('Draft saved successfully');
+        return true;
       } else {
-        console.error('Save draft failed:', result.message);
         error(result.message || 'Failed to save draft');
+        return false;
       }
-    } catch (err) {
-      console.error('Save draft failed:', err);
+    } catch {
       error('Failed to save draft');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  // Publish: save draft first (so Step 5 data like affiliate is persisted) then publish
+  const handlePublish = React.useCallback(async () => {
+    const saved = await handleSaveDraft();
+    if (!saved) throw new Error('Draft save failed');
+    const id = courseId;
+    if (!id) {
+      error('Course ID missing. Save draft first.');
+      throw new Error('Course ID missing');
+    }
+    const result = await courseService.publishCourse(id, 'Live & Selling');
+    if (!result.success) {
+      error(result.message || 'Failed to publish course');
+      throw new Error(result.message || 'Failed to publish course');
+    }
+    // Success toast and dialog are shown by PreviewPublishStep
+  }, [courseId, error]);
 
-  // Next step
-  const handleNext = () => {
-    if (validate()) setActiveStep((s) => Math.min(steps.length - 1, s + 1));
-  };
+  // Map Certificate step template id (1-6) to PDF generator template id (1-4)
+  const pdfTemplateId = React.useMemo(() => {
+    const id = selectedTemplate || '1';
+    if (id === '1' || id === '2') return id;
+    if (id === '3') return '4'; // Minimal Elegance -> Minimalist Clean
+    if (id === '4') return '3'; // Premium Gold
+    return '2'; // 5, 6 -> Modern Corporate
+  }, [selectedTemplate]);
 
+  // Build certificate data from current config (templates + editor + settings) for PDF generation
+  const buildCertificateDataForTemplate = React.useCallback((): CertificateData => {
+    const instructor = signatures?.[0];
+    const dean = signatures?.[1];
+    return {
+      studentName: 'Student Name',
+      courseName: title || 'Course Name',
+      completionDate: new Date().toISOString().split('T')[0],
+      certificateNumber: `TEMPLATE-${Date.now()}`,
+      instructorName: instructor?.name || 'Instructor',
+      organizationName: dean?.enabled ? dean.name : undefined,
+      certificateDescription: certificateDescription || 'This is to certify that [Name] has successfully completed the course',
+      signBelowText: 'has successfully completed the course',
+      instructorSignature: instructor?.enabled && instructor?.image ? instructor.image : undefined,
+      deanSignature: dean?.enabled && dean?.image ? dean.image : undefined,
+      applicationLogo: applicationLogoEnabled ? certificateApplicationLogoUrl ?? undefined : undefined,
+      applicationLogoEnabled: applicationLogoEnabled ?? true,
+      courseLogo: certificateApplicationLogoUrl ?? undefined,
+      creatorLogo: certificateCreatorLogoUrl ?? undefined
+    };
+  }, [title, certificateDescription, applicationLogoEnabled, certificateApplicationLogoUrl, certificateCreatorLogoUrl, signatures]);
 
+  // Save certificate settings: generate PDF from config (templates + editor + settings) and upload, or upload custom PDF if user selected one. No local file required for the main flow.
+  const handleSaveCertificateSettings = React.useCallback(async () => {
+    if (!courseId) {
+      error('Save draft first to get a course ID, then you can save certificate settings.');
+      return;
+    }
+    try {
+      if (templatePdfFile) {
+        const result = await courseService.uploadCertificateTemplate(courseId, templatePdfFile);
+        if (result.success && result.certificateTemplatePdfUrl) {
+          setCertificateTemplatePdfUrl(result.certificateTemplatePdfUrl);
+          setTemplatePdfFile(null);
+          setCertificatePreviewKey((k) => k + 1);
+          success('Custom certificate template saved.');
+        } else {
+          error(result.message || 'Failed to upload certificate template.');
+          return;
+        }
+      } else {
+        // Generate PDF from current config (Templates + Editor + Settings) and upload
+        let applicationLogoUrl = certificateApplicationLogoUrl;
+        if (logoFile && !applicationLogoUrl) {
+          applicationLogoUrl = await new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(logoFile);
+          });
+        }
+        let creatorLogoUrl = certificateCreatorLogoUrl;
+        if (creatorLogoFile && !creatorLogoUrl) {
+          creatorLogoUrl = await new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(creatorLogoFile);
+          });
+        }
+        const baseData = buildCertificateDataForTemplate();
+        // Load seal image so PDF shows actual seal/badge instead of fallback circle
+        const sealDataUrl = await getSealDataUrl();
+        // Compress logos only; leave signatures uncompressed (PNG) so they don't render as black bars
+        const [compressedApp, compressedCourse, compressedCreator] = await Promise.all([
+          applicationLogoEnabled && applicationLogoUrl && applicationLogoUrl.startsWith('data:')
+            ? compressDataUrlImage(applicationLogoUrl)
+            : Promise.resolve(undefined),
+          applicationLogoUrl?.startsWith('data:') ? compressDataUrlImage(applicationLogoUrl) : Promise.resolve(undefined),
+          creatorLogoUrl?.startsWith('data:') ? compressDataUrlImage(creatorLogoUrl) : Promise.resolve(undefined)
+        ]);
+        const data: CertificateData = {
+          ...baseData,
+          applicationLogo: applicationLogoEnabled && (compressedApp ?? applicationLogoUrl) ? (compressedApp ?? applicationLogoUrl) : undefined,
+          courseLogo: compressedCourse ?? applicationLogoUrl ?? undefined,
+          creatorLogo: compressedCreator ?? creatorLogoUrl ?? undefined,
+          sealImage: sealDataUrl || undefined
+          // instructorSignature and deanSignature left as-is from baseData (PNG, no compression)
+        };
+        const blob = generateCertificateBlob(pdfTemplateId, data);
+        const file = new File([blob], 'certificate-template.pdf', { type: 'application/pdf' });
+        const result = await courseService.uploadCertificateTemplate(courseId, file);
+        if (result.success && result.certificateTemplatePdfUrl) {
+          setCertificateTemplatePdfUrl(result.certificateTemplatePdfUrl);
+          setCertificatePreviewKey((k) => k + 1);
+          success('Certificate generated from your design and saved.');
+        } else {
+          error(result.message || 'Failed to save certificate template.');
+          return;
+        }
+      }
+    } catch (err) {
+      error('Failed to generate or save certificate. Please try again.');
+      return;
+    }
+    await saveDraftBeforeLeave(false);
+  }, [courseId, templatePdfFile, pdfTemplateId, buildCertificateDataForTemplate, applicationLogoEnabled, certificateApplicationLogoUrl, certificateCreatorLogoUrl, logoFile, creatorLogoFile, success, error, saveDraftBeforeLeave]);
 
+  // When user selects a new application/course logo file, store both File and data URL (for draft payload)
+  const handleLogoChange = React.useCallback((file: File | null) => {
+    setLogoFile(file);
+    if (!file) {
+      setCertificateApplicationLogoUrl(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCertificateApplicationLogoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
-
-
-
-  // Certificate state
-  const [certificateEnabled, setCertificateEnabled] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('1');
-  const [certificateTitle, setCertificateTitle] = useState('Certificate of Completion');
-  const [certificateDescription, setCertificateDescription] = useState('This is to certify that [Name] has successfully completed the course');
-  const [completionPercentage, setCompletionPercentage] = useState(100);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [applicationLogoEnabled, setApplicationLogoEnabled] = useState(true); // Default enabled
-  const [signatures, setSignatures] = useState<Array<{
-    id: string;
-    name: string;
-    designation: string;
-    type: 'upload' | 'draw';
-    image?: string;
-    enabled: boolean;
-    isDefault?: boolean;
-  }>>([]);
-
-  // New state variables for creator logo
-  const [creatorLogoFile, setCreatorLogoFile] = useState<File | null>(null);
-
-
-
-
-
-  // Debug activeStep changes
-  React.useEffect(() => {
-    console.log('Active step changed to:', activeStep, 'Step name:', steps[activeStep]);
-  }, [activeStep]);
+  // When user selects a new creator logo file, store both File and data URL (for draft payload)
+  const handleCreatorLogoChange = React.useCallback((file: File | null) => {
+    setCreatorLogoFile(file);
+    if (!file) {
+      setCertificateCreatorLogoUrl(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCertificateCreatorLogoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // Course data state for auto-save
   const courseData = React.useMemo(() => ({
@@ -931,12 +1408,50 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     completionPercentage, applicationLogoEnabled, signatures, creatorLogoFile
   ]);
 
+  // Sync drip methods with modules
+  React.useEffect(() => {
+    if (!dripEnabled || !modules || modules.length === 0) {
+      // If drip is disabled or no modules, clear drip methods
+      if (dripMethods.length > 0) {
+        setDripMethods([]);
+      }
+      return;
+    }
+
+    const moduleIds = modules.map(m => m.id);
+    const currentDripMethodIds = dripMethods.map(dm => dm.id);
+
+    // Add drip methods for new modules
+    const newModules = modules.filter(m => !currentDripMethodIds.includes(m.id));
+    if (newModules.length > 0) {
+      setDripMethods(prevMethods => {
+        const newDripMethods = newModules.map((module) => {
+          const moduleIndex = modules.indexOf(module);
+          return {
+            id: module.id,
+            method: (moduleIndex === 0 ? 'immediate' : 'days') as 'immediate' | 'days' | 'date',
+            action: moduleIndex === 0 ? undefined : 7
+          };
+        });
+        return [...prevMethods, ...newDripMethods];
+      });
+    }
+
+    // Remove drip methods for deleted modules
+    const removedDripMethods = dripMethods.filter(dm => !moduleIds.includes(dm.id));
+    if (removedDripMethods.length > 0) {
+      setDripMethods(prevMethods => prevMethods.filter(dm => moduleIds.includes(dm.id)));
+    }
+  // Only depend on modules and dripEnabled, not dripMethods to avoid infinite loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modules, dripEnabled]);
+
   // Track unsaved changes
   React.useEffect(() => {
     if (title || subtitle || description || category || (modules && modules.length > 0)) {
       hasUnsavedChanges.current = true;
     }
-  }, [title, subtitle, description, category, level, language, tags, visibility, cover, modules]);
+  }, [title, subtitle, description, category, level, language, tags, visibility, cover, modules, dripEnabled, dripMethods, dripDisplayOption, dripHideUnlockDate, dripSendCommunication]);
 
   // Auto-save every 10 seconds
   React.useEffect(() => {
@@ -947,6 +1462,7 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     }, 10000); // 10 seconds
     
     return () => clearInterval(autoSaveInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSaveEnabled, courseData]);
 
   // Save draft before page unload (browser navigation)
@@ -974,34 +1490,25 @@ const CourseBuilderPage: React.FC = React.memo(() => {
       // Save draft when component is about to unmount
       if (hasUnsavedChanges.current) {
         // Use sendBeacon or synchronous save if possible
-        saveDraftBeforeLeave(true).catch(err => {
-          console.error('Failed to save draft on unmount:', err);
-        });
+        saveDraftBeforeLeave(true).catch(() => {});
       }
     };
   }, [saveDraftBeforeLeave]);
 
   // Listen for navigation events from Sidebar and save before navigating
   React.useEffect(() => {
-    let savePromise: Promise<boolean> | null = null;
-    
-    const handleSaveBeforeNavigation = (e: Event) => {
+    const handleSaveBeforeNavigation = () => {
       // Only save if there are actual changes (at least a title)
       if (title || subtitle || description || category) {
         setIsSavingBeforeLeave(true);
-        // Save draft and wait for completion
-        savePromise = saveDraftBeforeLeave(true)
+        saveDraftBeforeLeave(true)
           .then((success) => {
             if (success) {
-              // Small delay to ensure save completes
               return new Promise<boolean>(resolve => setTimeout(() => resolve(true), 500));
             }
             return false;
           })
-          .catch((error) => {
-            console.error('Failed to save before navigation:', error);
-            return false;
-          })
+          .catch(() => false)
           .finally(() => {
             setIsSavingBeforeLeave(false);
           });
@@ -1014,9 +1521,13 @@ const CourseBuilderPage: React.FC = React.memo(() => {
     };
   }, [saveDraftBeforeLeave, title, subtitle, description, category]);
 
-  // Stepper click handler with loading simulation
+  // Stepper click handler with loading simulation (capture step 5 data when leaving)
   const handleStepClick = (idx: number) => {
     if (activeStep === idx) return;
+    if (activeStep === 5) {
+      const additional = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+      if (additional) setAdditionalDetailsForDraft(additional);
+    }
     setLoadingStep(true);
     setTimeout(() => {
       setActiveStep(idx);
@@ -1027,28 +1538,86 @@ const CourseBuilderPage: React.FC = React.memo(() => {
   // Preload adjacent steps for faster navigation
   React.useEffect(() => {
     const preloadAdjacentSteps = () => {
-      const adjacentSteps = [activeStep - 1, activeStep + 1].filter(
+      // Preload current step + next step for smoother navigation
+      const stepsToPreload = [activeStep, activeStep + 1].filter(
         step => step >= 0 && step < steps.length
       );
       
-      // Preload heavy components for adjacent steps
-      if (adjacentSteps.includes(2)) { // Drip Content
-        import('./DripContentStep');
+      // Preload heavy components for current and next steps
+      if (stepsToPreload.includes(2)) {
+        import('./DripContentStep').catch(() => {});
       }
-      if (adjacentSteps.includes(3)) { // Certificate
-        import('./CertificateStep');
+      if (stepsToPreload.includes(3)) {
+        import('./CertificateStep').catch(() => {});
       }
-      if (adjacentSteps.includes(4)) { // Payment Details
-        import('./PaymentDetailsStep');
+      if (stepsToPreload.includes(4)) {
+        import('./PaymentDetailsStep').catch(() => {});
       }
-      if (adjacentSteps.includes(5)) { // Additional Details
-        import('./AdditionalDetailsStep');
+      if (stepsToPreload.includes(5)) {
+        import('./AdditionalDetailsStep').catch(() => {});
       }
     };
 
     // Preload immediately for faster loading
     preloadAdjacentSteps();
   }, [activeStep]);
+
+  // Aggressive preloading: Preload Certificate step when on Drip Content step
+  React.useEffect(() => {
+    if (activeStep === 2) {
+      import('./CertificateStep').catch(() => {});
+    }
+  }, [activeStep]);
+
+  // If in preview mode, render only the PreviewPublishStep
+  if (isPreviewMode && activeStep === 6) {
+    // Show loading while course is being loaded
+    if (loadingCourse || !courseId) {
+      return (
+        <Box sx={{ minHeight: '100vh', width: '100%', p: 0, m: 0, overflow: 'hidden', bgcolor: '#f8f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <AnimatedSpinner />
+        </Box>
+      );
+    }
+    
+    return (
+      <Box sx={{ minHeight: '100vh', width: '100%', p: 0, m: 0, overflow: 'hidden', bgcolor: '#f8f9ff' }}>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBack />}
+            onClick={() => navigate('/love/learnloop')}
+            sx={{ mb: 2 }}
+          >
+            Back to Course Management
+          </Button>
+          <PreviewPublishStep 
+            courseId={courseId}
+            onSaveDraft={handleSaveDraft}
+            onPublish={handlePublish}
+            courseData={{
+              title,
+              subtitle,
+              description,
+              category,
+              level,
+              language,
+              tags,
+              visibility,
+              coverImage: cover,
+              modules: modules,
+              dripEnabled,
+              dripMethods,
+              dripDisplayOption,
+              dripHideUnlockDate,
+              dripSendCommunication
+            }}
+          />
+        </Container>
+        <ToastNotification toast={toast} onClose={hideToast} />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', width: '100%', p: 0, m: 0, overflow: 'hidden' }}>
@@ -1192,6 +1761,11 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                 }}
               >
                 {steps[activeStep]}
+                {courseId && title && (
+                  <Box component="span" sx={{ ml: 2, fontSize: { xs: 18, md: 24 }, fontWeight: 600, color: '#334155' }}>
+                    - {courseId} - {title}
+                  </Box>
+                )}
               </Typography>
             </StepLabelBox>
             <GlassPanel sx={{ width: '100%', minHeight: 220, position: 'relative', boxSizing: 'border-box', marginTop: 0, overflow: 'hidden' }}>
@@ -1206,6 +1780,11 @@ const CourseBuilderPage: React.FC = React.memo(() => {
               }}>
                 <Typography variant="body2" color="text.secondary">
                   Current Step: {activeStep} - {steps[activeStep]}
+                  {courseId && title && (
+                    <Box component="span" sx={{ ml: 1, fontWeight: 600, color: '#334155' }}>
+                      - {courseId} - {title}
+                    </Box>
+                  )}
                 </Typography>
                 
                 {/* Preview Button - Show on Step 0 and Step 1 */}
@@ -1363,30 +1942,48 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                       </Stack>
                     </Box>
                   ) : activeStep === 1 ? (
-                    <CurriculumStep modules={modules} setModules={setModules} />
+                    <CurriculumStep modules={modules} setModules={setModules} courseId={courseId} />
                   ) : activeStep === 2 ? (
                     <Suspense fallback={<CircularProgress />}>
-                      <DripContentStep />
+                      <DripContentStep
+                        dripEnabled={dripEnabled}
+                        onDripEnabledChange={handleDripEnabledChange}
+                        dripMethods={dripMethods}
+                        onDripMethodsChange={setDripMethods}
+                        displayOption={dripDisplayOption}
+                        onDisplayOptionChange={handleDripDisplayOptionChange}
+                        hideUnlockDate={dripHideUnlockDate}
+                        onHideUnlockDateChange={handleDripHideUnlockDateChange}
+                        sendCommunication={dripSendCommunication}
+                        onSendCommunicationChange={handleDripSendCommunicationChange}
+                        modules={modules}
+                      />
                     </Suspense>
                   ) : activeStep === 3 ? (
                     <Suspense fallback={
                       <Box sx={{ 
                         display: 'flex', 
+                        flexDirection: 'column',
                         justifyContent: 'center', 
                         alignItems: 'center', 
-                        height: '400px',
-                        background: '#f8f9ff',
-                        borderRadius: 2
+                        minHeight: '400px',
+                        background: 'linear-gradient(145deg, #f8f9ff 0%, #ffffff 100%)',
+                        borderRadius: 2,
+                        p: 4
                       }}>
-                        <Box sx={{ textAlign: 'center' }}>
-                          <CircularProgress size={60} sx={{ mb: 3, color: '#6C63FF' }} />
-                          <Typography variant="h6" color="text.secondary" gutterBottom>
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          <CircularProgress size={50} sx={{ mb: 2, color: '#6C63FF' }} />
+                          <Typography variant="h6" color="#6C63FF" gutterBottom fontWeight={600}>
                             Loading Certificate Builder
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             Preparing certificate templates and settings...
                           </Typography>
-                        </Box>
+                        </motion.div>
                       </Box>
                     }>
                     <ErrorBoundary>
@@ -1402,28 +1999,44 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                       completionPercentage={completionPercentage}
                       onCompletionPercentageChange={setCompletionPercentage}
                       logoFile={logoFile}
-                      onLogoChange={setLogoFile}
+                      applicationLogoUrl={certificateApplicationLogoUrl}
+                      onLogoChange={handleLogoChange}
                       applicationLogoEnabled={applicationLogoEnabled}
                       onApplicationLogoEnabledChange={setApplicationLogoEnabled}
                       signatures={signatures}
                       onSignaturesChange={setSignatures}
                       creatorLogoFile={creatorLogoFile}
-                      onCreatorLogoChange={setCreatorLogoFile}
+                      creatorLogoUrl={certificateCreatorLogoUrl}
+                      onCreatorLogoChange={handleCreatorLogoChange}
+                      courseId={courseId}
+                      templatePdfFile={templatePdfFile}
+                      onTemplatePdfFileChange={setTemplatePdfFile}
+                      certificateTemplatePdfUrl={certificateTemplatePdfUrl}
+                      certificatePreviewKey={certificatePreviewKey}
+                      onSaveSettings={handleSaveCertificateSettings}
                     />
                     </ErrorBoundary>
                     </Suspense>
                   ) : activeStep === 4 ? (
                     <Suspense fallback={<CircularProgress />}>
-                    <PaymentDetailsStep />
+                    <PaymentDetailsStep
+                      initialData={paymentDetailsInitialData}
+                      paymentDetailsRef={paymentDetailsStepRef}
+                    />
                     </Suspense>
                   ) : activeStep === 5 ? (
                     <Suspense fallback={<CircularProgress />}>
-                      <AdditionalDetailsStep lastSaved={lastSaved} />
+                      <AdditionalDetailsStep
+                        lastSaved={lastSaved}
+                        initialData={additionalDetailsInitialData}
+                        additionalDetailsRef={additionalDetailsStepRef}
+                      />
                     </Suspense>
                   ) : activeStep === 6 ? (
-                    <>
-                      {console.log('Rendering PreviewPublishStep, activeStep:', activeStep)}
-                      <PreviewPublishStep 
+                    <PreviewPublishStep 
+                        courseId={courseId}
+                        onSaveDraft={handleSaveDraft}
+                        onPublish={handlePublish}
                         courseData={{
                           title,
                           subtitle,
@@ -1434,10 +2047,14 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                           tags,
                           visibility,
                           coverImage: cover,
-                          modules: modules
+                          modules: modules,
+                          dripEnabled,
+                          dripMethods,
+                          dripDisplayOption,
+                          dripHideUnlockDate,
+                          dripSendCommunication
                         }}
                       />
-                    </>
                   ) : (
                     <Typography variant="body1" color="text.secondary">
                       [Futuristic {steps[activeStep]} UI coming soon...]
@@ -1477,24 +2094,50 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                   Back
                 </Button>
 
-                {/* Center - Save Draft button */}
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  onClick={handleSaveDraft}
-                  disabled={saving}
-                  sx={{ 
-                    minWidth: 120,
-                    borderColor: '#6C63FF',
-                    color: '#6C63FF',
-                    '&:hover': {
-                      borderColor: '#5A52D5',
-                      backgroundColor: 'rgba(108, 99, 255, 0.08)'
-                    }
-                  }}
-                >
-                  {saving ? 'Saving...' : 'Save Draft'}
-                </Button>
+                {/* Center - Save Draft and Save Payment Settings (step 4 only) */}
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    onClick={handleSaveDraft}
+                    disabled={saving}
+                    sx={{ 
+                      minWidth: 120,
+                      borderColor: '#6C63FF',
+                      color: '#6C63FF',
+                      '&:hover': {
+                        borderColor: '#5A52D5',
+                        backgroundColor: 'rgba(108, 99, 255, 0.08)'
+                      }
+                    }}
+                  >
+                    {saving ? 'Saving...' : 'Save Draft'}
+                  </Button>
+                  {activeStep === 4 && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={savingPaymentSettings ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                      onClick={handleSavePaymentSettings}
+                      disabled={savingPaymentSettings}
+                      sx={{ minWidth: 160, boxShadow: '0 2px 12px #00FFC633' }}
+                    >
+                      {savingPaymentSettings ? 'Saving...' : 'Save Payment Settings'}
+                    </Button>
+                  )}
+                  {activeStep === 5 && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={savingAdditionalSettings ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                      onClick={handleSaveAdditionalSettings}
+                      disabled={savingAdditionalSettings}
+                      sx={{ minWidth: 180, boxShadow: '0 2px 12px #00FFC633' }}
+                    >
+                      {savingAdditionalSettings ? 'Saving...' : 'Save Additional Settings'}
+                    </Button>
+                  )}
+                </Stack>
 
                 {/* Right side - Next button */}
                 <Button
@@ -1503,25 +2146,16 @@ const CourseBuilderPage: React.FC = React.memo(() => {
                   endIcon={<ArrowForward />}
                   disabled={activeStep === steps.length - 1}
                   onClick={() => {
-                    console.log('Next button clicked, current step:', activeStep);
-                    // Only validate for step 0 (Course Details)
                     if (activeStep === 0) {
                       if (validate()) {
-                        setActiveStep((s) => {
-                          const nextStep = Math.min(steps.length - 1, s + 1);
-                          console.log('Moving to step:', nextStep);
-                          return nextStep;
-                        });
-                      } else {
-                        console.log('Validation failed, staying on step:', activeStep);
+                        setActiveStep((s) => Math.min(steps.length - 1, s + 1));
                       }
                     } else {
-                      // For all other steps, allow navigation without validation
-                      setActiveStep((s) => {
-                        const nextStep = Math.min(steps.length - 1, s + 1);
-                        console.log('Moving to step:', nextStep);
-                        return nextStep;
-                      });
+                      if (activeStep === 5) {
+                        const additional = additionalDetailsStepRef.current?.getAdditionalDetails?.();
+                        if (additional) setAdditionalDetailsForDraft(additional);
+                      }
+                      setActiveStep((s) => Math.min(steps.length - 1, s + 1));
                     }
                   }}
                   sx={{ minWidth: 120, boxShadow: '0 2px 12px #00FFC633' }}

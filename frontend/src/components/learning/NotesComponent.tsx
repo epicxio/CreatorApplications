@@ -7,18 +7,11 @@ import {
   TextField,
   Button,
   Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
-  Paper,
-  Divider,
   Menu,
   MenuItem
 } from '@mui/material';
@@ -27,8 +20,6 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   MoreVert as MoreVertIcon,
-  Bookmark as BookmarkIcon,
-  BookmarkBorder as BookmarkBorderIcon,
   Search as SearchIcon,
   FilterList as FilterIcon
 } from '@mui/icons-material';
@@ -37,9 +28,9 @@ import { Note } from '../../types/course';
 
 interface NotesComponentProps {
   lessonId: string;
-  onNoteAdded?: (note: Note) => void;
-  onNoteUpdated?: (note: Note) => void;
-  onNoteDeleted?: (noteId: string) => void;
+  onNoteAdded?: (_note: Note) => void;
+  onNoteUpdated?: (_note: Note) => void;
+  onNoteDeleted?: (_noteId: string) => void;
 }
 
 const NotesComponent: React.FC<NotesComponentProps> = ({
@@ -66,8 +57,8 @@ const NotesComponent: React.FC<NotesComponentProps> = ({
       if (storedNotes) {
         setNotes(JSON.parse(storedNotes));
       }
-    } catch (error) {
-      console.error('Error loading notes:', error);
+    } catch {
+      // Notes failed to load
     }
   };
 
@@ -75,8 +66,8 @@ const NotesComponent: React.FC<NotesComponentProps> = ({
   const saveNotes = (notesList: Note[]) => {
     try {
       localStorage.setItem(`notes_${lessonId}`, JSON.stringify(notesList));
-    } catch (error) {
-      console.error('Error saving notes:', error);
+    } catch {
+      // Notes failed to save
     }
   };
 
@@ -203,6 +194,7 @@ const NotesComponent: React.FC<NotesComponentProps> = ({
   // Load notes on mount
   useEffect(() => {
     loadNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lessonId is the trigger
   }, [lessonId]);
 
   return (

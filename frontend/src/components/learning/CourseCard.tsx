@@ -8,8 +8,8 @@ interface CourseCardProps {
   course: Course;
   progress?: number;
   isEnrolled?: boolean;
-  onEnroll?: (courseId: string) => void;
-  onContinue?: (courseId: string) => void;
+  onEnroll?: (_courseId: string) => void;
+  onContinue?: (_courseId: string) => void;
 }
 
 const CourseCard: React.FC<CourseCardProps> = ({

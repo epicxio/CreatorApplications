@@ -25,7 +25,6 @@ import {
   Send as SendIcon,
   ThumbUp as ThumbUpIcon,
   Reply as ReplyIcon,
-  MoreVert as MoreVertIcon,
   Person as PersonIcon,
   School as SchoolIcon
 } from '@mui/icons-material';
@@ -35,7 +34,7 @@ import { courseService } from '../../services/courseService';
 
 interface CommentsComponentProps {
   lessonId: string;
-  onCommentAdded?: (comment: Comment) => void;
+  onCommentAdded?: (_comment: Comment) => void;
 }
 
 const CommentsComponent: React.FC<CommentsComponentProps> = ({
@@ -58,9 +57,8 @@ const CommentsComponent: React.FC<CommentsComponentProps> = ({
       setError(null);
       const commentsData = await courseService.getComments(lessonId);
       setComments(commentsData);
-    } catch (err) {
+    } catch {
       setError('Failed to load comments');
-      console.error('Error loading comments:', err);
     } finally {
       setLoading(false);
     }
@@ -76,9 +74,8 @@ const CommentsComponent: React.FC<CommentsComponentProps> = ({
       setComments(prev => [comment, ...prev]);
       setNewComment('');
       onCommentAdded?.(comment);
-    } catch (err) {
+    } catch {
       setError('Failed to add comment');
-      console.error('Error adding comment:', err);
     } finally {
       setSubmitting(false);
     }
@@ -102,9 +99,8 @@ const CommentsComponent: React.FC<CommentsComponentProps> = ({
       setReplyText('');
       setReplyingTo(null);
       setShowReplyDialog(false);
-    } catch (err) {
+    } catch {
       setError('Failed to add reply');
-      console.error('Error adding reply:', err);
     } finally {
       setSubmitting(false);
     }
@@ -141,6 +137,7 @@ const CommentsComponent: React.FC<CommentsComponentProps> = ({
   // Load comments on mount
   useEffect(() => {
     loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lessonId is the trigger; loadComments is stable
   }, [lessonId]);
 
   const renderComment = (comment: Comment, isReply: boolean = false) => (

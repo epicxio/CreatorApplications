@@ -17,8 +17,17 @@ const userSchema = new mongoose.Schema({
     ref: 'Role',
     required: true
   },
-  status: { type: String, enum: ['active', 'inactive', 'pending', 'rejected', 'deleted'], default: 'active' },
-  
+  status: { type: String, enum: ['active', 'inactive', 'pending', 'rejected', 'suspended', 'deleted'], default: 'active' },
+
+  // Suspension (when status is 'suspended')
+  suspendedAt: { type: Date, default: null },
+  suspendedReason: { type: String, trim: true, default: null },
+  suspendedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  // Reactivation (after suspend)
+  reactivatedAt: { type: Date, default: null },
+  reactivatedReason: { type: String, trim: true, default: null },
+  reactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
   // User IDs
   userId: { type: String, unique: true, sparse: true }, // Universal user ID for all types
   creatorId: { type: String, unique: true, sparse: true }, // CA00001 format for creators only
