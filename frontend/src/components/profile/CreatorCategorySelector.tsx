@@ -7,6 +7,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CancelIcon from "@mui/icons-material/Cancel";
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
+
 interface CreatorCategorySelectorProps {
   user: { role?: string | { name?: string } };
   creatorId: string;
@@ -32,14 +34,14 @@ export default function CreatorCategorySelector({ user, creatorId, onSave }: Cre
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/creator-categories")
+    fetch(`${API_BASE}/creator-categories`)
       .then(res => res.json())
       .then((data: Category[]) => setCategories(data));
   }, []);
 
   useEffect(() => {
     if (creatorId) {
-      fetch(`/api/users/${creatorId}/categories`)
+      fetch(`${API_BASE}/users/${creatorId}/categories`)
         .then(res => res.json())
         .then((data: { categories: { mainCategoryId: string; subCategoryIds: string[] }[] }) => {
           const sel: Selected = {};
@@ -77,7 +79,7 @@ export default function CreatorCategorySelector({ user, creatorId, onSave }: Cre
       setError('Please select at least one category and subcategory.');
       return;
     }
-    fetch(`/api/users/${creatorId}/categories`, {
+    fetch(`${API_BASE}/users/${creatorId}/categories`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ categories: categoriesToSave })

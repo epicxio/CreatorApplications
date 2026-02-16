@@ -2,11 +2,13 @@ import { NotificationVariablesInfo } from './NotificationVariablesInfo';
 import axios from 'axios';
 import React, { useState } from 'react';
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
+
 const NotificationControlCenter = () => {
   const [variables, setVariables] = useState<{ variable: string; description: string }[]>([]);
 
   const handleScan = async () => {
-    const res = await axios.post('/api/notification-events/scan');
+    const res = await axios.post(`${API_BASE}/notification-events/scan`);
     if (res.data && res.data.variables) {
       setVariables(res.data.variables);
     }

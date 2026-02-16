@@ -93,6 +93,7 @@ function getPriceValue(price: { INR: number; USD: number; EUR: number }) {
 const LearnLoopCourseManager: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -124,9 +125,11 @@ const LearnLoopCourseManager: React.FC = () => {
     : ['courseId', 'name', 'createdAt', 'type', 'access', 'enrollments', 'completionRate', 'status', 'lastUpdated', 'visibility', 'features', 'actions'];
 
   const loadCourses = React.useCallback(() => {
+    setLoadError(null);
     setLoading(true);
     courseService.getCourses().then((response) => {
       if (response.success && response.data) {
+        setLoadError(null);
         // Map backend data to Course[] format expected by the table
         const formattedCourses: Course[] = response.data.courses.map((course: any) => {
           return {
@@ -153,9 +156,14 @@ const LearnLoopCourseManager: React.FC = () => {
           };
         });
         setCourses(formattedCourses);
+      } else {
+        setLoadError((response as any).message || 'Failed to load courses.');
+        error((response as any).message || 'Failed to load courses.');
       }
-    }).catch(() => {
-      error('Failed to load courses.');
+    }).catch((err: any) => {
+      const message = err?.code === 'ECONNABORTED' ? 'Request timed out. Check that the backend is running.' : (err?.message || 'Failed to load courses.');
+      setLoadError(message);
+      error(message);
     }).finally(() => setLoading(false));
   }, [error]);
 
@@ -426,7 +434,19 @@ const LearnLoopCourseManager: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={tableColumns.length} align="center">Loading...</TableCell>
+                <TableCell colSpan={tableColumns.length} align="center" sx={{ py: 4 }}>
+                  <CircularProgress size={24} sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Loading...
+                </TableCell>
+              </TableRow>
+            ) : loadError ? (
+              <TableRow>
+                <TableCell colSpan={tableColumns.length} align="center" sx={{ py: 4 }}>
+                  <Typography color="error" sx={{ mb: 1 }}>{loadError}</Typography>
+                  <Button variant="outlined" size="small" onClick={() => loadCourses()}>
+                    Retry
+                  </Button>
+                </TableCell>
               </TableRow>
             ) : filteredCourses.length === 0 ? (
               <TableRow>

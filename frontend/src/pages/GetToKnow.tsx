@@ -19,6 +19,8 @@ import CategoryIcon from '@mui/icons-material/Category';
 import LabelIcon from '@mui/icons-material/Label';
 import { User as BaseUser } from '../services/userService';
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
+
 // Extend User type to include categories
 type User = BaseUser & {
   categories?: Array<{
@@ -419,7 +421,7 @@ const GetToKnow: React.FC = () => {
     // Fetch all available categories
     const fetchCategories = async () => {
       try {
-        const res = await fetch('/api/creator-categories');
+        const res = await fetch(`${API_BASE}/creator-categories`);
         const data = await res.json();
         setAllCategories(data);
       } catch (err) {

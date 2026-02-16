@@ -77,6 +77,8 @@ import axios from 'axios';
 import notificationTypeService, { NotificationType as BackendNotificationType } from '../../services/notificationTypeService';
 import { NotificationVariablesInfo } from '../NotificationVariablesInfo'; // adjust path if needed
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
+
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
   margin: theme.spacing(2),
@@ -510,7 +512,7 @@ const NotificationControlCenter: React.FC = () => {
     setScanError(null);
     setScanSuccess(null);
     try {
-      const res = await axios.post('/api/notifications/scan');
+      const res = await axios.post(`${API_BASE}/notifications/scan`);
       if (res.data.success) {
         setNotificationEvents(res.data.events);
         let msg = 'Notification events updated!';
@@ -585,7 +587,7 @@ const NotificationControlCenter: React.FC = () => {
 
   // Fetch notification events on mount
   useEffect(() => {
-    axios.get('/api/notifications').then(res => {
+    axios.get(`${API_BASE}/notifications`).then(res => {
       if (res.data.success) setNotificationEvents(res.data.events);
     });
   }, []);
@@ -595,7 +597,7 @@ const NotificationControlCenter: React.FC = () => {
     const fetchData = async () => {
       try {
         // Fetch roles
-        const rolesResponse = await axios.get('/api/roles');
+        const rolesResponse = await axios.get(`${API_BASE}/roles`);
         if (Array.isArray(rolesResponse.data)) {
           setRoles(rolesResponse.data.map((role: any) => ({ _id: role._id, name: role.name })));
         } else if (Array.isArray(rolesResponse.data.roles)) {
@@ -628,7 +630,7 @@ const NotificationControlCenter: React.FC = () => {
 
   // Fetch template variables on mount
   useEffect(() => {
-    axios.get('/api/notifications/template-variables').then(res => {
+    axios.get(`${API_BASE}/notifications/template-variables`).then(res => {
       if (res.data && res.data.variables) {
         setTemplateVariables(res.data.variables);
       }
@@ -638,7 +640,7 @@ const NotificationControlCenter: React.FC = () => {
   // Fetch template variables for selected event type
   useEffect(() => {
     if (tabValue === 3 && emitEventType) {
-      axios.get(`/api/notifications/template-variables?eventType=${emitEventType}`).then(res => {
+      axios.get(`${API_BASE}/notifications/template-variables?eventType=${emitEventType}`).then(res => {
         if (res.data && res.data.variables) {
           setEmitVariableList(res.data.variables);
           // Reset emitVariables with empty values
@@ -1015,7 +1017,7 @@ const NotificationControlCenter: React.FC = () => {
                 if (!emitEventType) return;
                 setLoadingSample(true);
                 try {
-                  const res = await axios.get(`/api/notifications/test-data?eventType=${emitEventType}`);
+                  const res = await axios.get(`${API_BASE}/notifications/test-data?eventType=${emitEventType}`);
                   if (res.data && res.data.context) {
                     setEmitVariables(res.data.context);
                   }
@@ -1075,7 +1077,7 @@ const NotificationControlCenter: React.FC = () => {
                   setEmitLoading(true);
                   setEmitResult(null);
                   try {
-                    await axios.post('/api/notifications/emit', {
+                    await axios.post(`${API_BASE}/notifications/emit`, {
                       eventType: emitEventType,
                       context: emitVariables
                     });

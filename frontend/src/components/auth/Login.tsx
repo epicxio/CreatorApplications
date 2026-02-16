@@ -10,6 +10,8 @@ import authService from '../../services/authService';
 // Logo image import
 import creatorLogo from '../../assets/creator-logo.png';
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
+
 const SplitContainer = styled(Container)`
   min-height: calc(100vh - 80px);
   display: flex;
@@ -281,7 +283,7 @@ export const Login = () => {
       return;
     }
     try {
-      const response = await fetch('/api/users/creator-signup', {
+      const response = await fetch(`${API_BASE}/users/creator-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -393,7 +395,7 @@ export const Login = () => {
     setUsernameChecking(true);
     setUsernameError('');
     try {
-      const res = await fetch(`/api/users/check-username?username=${encodeURIComponent(formData.username.trim())}`);
+      const res = await fetch(`${API_BASE}/users/check-username?username=${encodeURIComponent(formData.username.trim())}`);
       if (res.status === 304) {
         setUsernameError('');
         return;
@@ -433,7 +435,7 @@ export const Login = () => {
       return;
     }
     try {
-      const res = await fetch(`/api/users/check-phone?phoneNumber=${encodeURIComponent(value)}`);
+      const res = await fetch(`${API_BASE}/users/check-phone?phoneNumber=${encodeURIComponent(value)}`);
       if (res.status === 304) {
         setPhoneError('');
         return;

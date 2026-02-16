@@ -1,11 +1,13 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { User } from '../types/auth';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.REACT_APP_API_URL
+  || (process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:5001/api');
 
-// Create axios instance
+// Create axios instance (timeout so requests fail fast instead of hanging)
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },

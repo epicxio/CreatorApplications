@@ -507,12 +507,11 @@ const FuturisticProfile: React.FC<FuturisticProfileProps> = ({ user, onUpdateUse
         <Box sx={{ width: '100%', maxWidth: 900, mb: 3 }}>
           <CreatorCategorySelector user={user || {}} creatorId={creatorId} onSave={() => {
             // Re-fetch categories completion after save
-            fetch(`/api/users/${user._id}/categories`)
-              .then(res => res.json())
-              .then((data: { categories: any[] }) => {
+            api.get(`/users/${user._id}/categories`).then((res) => {
+              const data = res.data as { categories: any[] };
                 const hasCategories = Array.isArray(data.categories) && data.categories.length > 0 && data.categories.some((cat: any) => cat.subCategoryIds && cat.subCategoryIds.length > 0);
                 setCategoriesComplete(hasCategories);
-              });
+              }).catch(() => {});
           }} />
         </Box>
       )}

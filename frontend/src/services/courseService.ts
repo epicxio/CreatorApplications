@@ -382,7 +382,7 @@ class CourseService {
         if (filters.certificateEnabled !== undefined) params.certificateEnabled = filters.certificateEnabled.toString();
       }
 
-      const response = await api.get('/courses/my-courses', { params });
+      const response = await api.get('/courses/my-courses', { params, timeout: 15000 });
       
       // Transform backend response to match frontend format
       const formattedCourses: Course[] = response.data.courses.map((course: any) => ({
@@ -431,6 +431,9 @@ class CourseService {
         }
       };
     } catch (error: any) {
+      const message = error?.code === 'ECONNABORTED'
+        ? 'Request timed out. Check that the backend is running.'
+        : (error.response?.data?.message || 'Failed to fetch courses');
       return {
         success: false,
         data: {
@@ -440,7 +443,7 @@ class CourseService {
           limit: 10,
           hasMore: false
         },
-        message: error.response?.data?.message || 'Failed to fetch courses'
+        message
       };
     }
   }

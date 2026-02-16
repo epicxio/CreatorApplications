@@ -632,8 +632,9 @@ const CreatorDialog: React.FC<CreatorDialogProps> = ({
   // Uniqueness checks: only set error if taken, do not block form submission while pending
   const handleUsernameBlur = async () => {
     if (!formData.username) return;
+    const base = BACKEND_URL || 'http://localhost:5001';
     try {
-      const res = await fetch(`/api/users/check-username?username=${encodeURIComponent(formData.username)}`);
+      const res = await fetch(`${base}/api/users/check-username?username=${encodeURIComponent(formData.username)}`);
       if (!res.ok) {
         setUsernameError('Could not validate username (server error)');
         return;
@@ -651,8 +652,9 @@ const CreatorDialog: React.FC<CreatorDialogProps> = ({
 
   const handlePhoneBlur = async () => {
     if (!formData.phoneNumber) return;
+    const base = BACKEND_URL || 'http://localhost:5001';
     try {
-      const res = await fetch(`/api/users/check-phone?phoneNumber=${encodeURIComponent(formData.phoneNumber)}`);
+      const res = await fetch(`${base}/api/users/check-phone?phoneNumber=${encodeURIComponent(formData.phoneNumber)}`);
       if (!res.ok) {
         setPhoneError('Could not validate phone number (server error)');
         return;
